@@ -12,7 +12,7 @@ Two caveats on coverage, stated up front because they affect how much weight to 
 Direct scraping of the ACM DL, DBLP, Crossref and Semantic Scholar was blocked from this environment; OpenAlex was the one reachable source, so proceedings were reconstructed by resolving each conference's per-year DOI prefix and paging every paper under it.
 
 
-![Theme trends across SIGIR, CHIIR, ECIR, ICTIR, ICMR and SPIRE, 2024-2026]({{artifact:art_317205ae-a1ed-4aee-873e-d065bf75b34c}})
+![Theme trends across SIGIR, CHIIR, ECIR, ICTIR, ICMR and SPIRE, 2024-2026](./ir_theme_trends.png)
 
 **What the trend data says.** Between 2024 and 2026 the shares that grew are: benchmarks and test collections (14%→27%), RAG (4%→12%), reranking and distillation (5%→11%), efficiency and latency (17%→23%), multimodal retrieval (10%→15%), robustness and adversarial work (6%→10%), hallucination and attribution (3%→6%), and agentic/tool-using IR (1%→4%). The shares that fell are recommendation (22%→19%) and fairness (5%→4%). Industry-affiliated papers held steady at roughly 10% of the corpus across all three years.
 
