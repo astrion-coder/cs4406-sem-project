@@ -639,3 +639,5 @@ Also: report latency as percentiles, use temporal rather than random splits wher
 
 - [ir_corpus_2024_2026.csv]({{artifact:art_14c5753f-ed15-4fbd-b4e3-5170408da4bf}}) — all 3,440 indexed papers with titles, abstracts, DOIs, venues, citation counts, affiliations and theme tags.
 - [project_reading_lists.csv]({{artifact:art_bea3ed15-c568-4986-a9c3-9676fe144d20}}) — the 93 anchor papers, one row per (project, paper), with open-access flags and PDF links where available.
+
+# Minor Update for test
