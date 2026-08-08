@@ -637,7 +637,17 @@ Also: report latency as percentiles, use temporal rather than random splits wher
 
 ## Files
 
-- [ir_corpus_2024_2026.csv]({{artifact:art_14c5753f-ed15-4fbd-b4e3-5170408da4bf}}) — all 3,440 indexed papers with titles, abstracts, DOIs, venues, citation counts, affiliations and theme tags.
-- [project_reading_lists.csv]({{artifact:art_bea3ed15-c568-4986-a9c3-9676fe144d20}}) — the 93 anchor papers, one row per (project, paper), with open-access flags and PDF links where available.
+- [ir_corpus_2024_2026.csv](./ir_corpus_2024_2026.csv) — all 3,440 indexed papers with titles, abstracts, DOIs, venues, citation counts, affiliations and theme tags.
+- [project_reading_lists.csv](./project_reading_lists.csv) — the 93 anchor papers, one row per (project, paper), with open-access flags and PDF links where available.
+
+## Shortlist
+
+Three of the twelve are shortlisted and specified in full — question, gap, arms, data, evaluation
+protocol, ablations, cost analysis, week-by-week schedule and verified reading list — under
+[`projects/`](./projects/):
+
+- [P7 — Designing a two-stage pipeline to a latency SLA](./projects/P7-latency-sla-pipeline.md)
+- [P10 — Semantic product search on a budget](./projects/P10-semantic-product-search-budget.md)
+- [P2 — A nugget-based RAG evaluation harness cheap enough for CI](./projects/P2-nugget-rag-eval-harness.md)
 
 # Minor Update for test
