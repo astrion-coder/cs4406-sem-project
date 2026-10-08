@@ -1,2 +1,4 @@
 def main() -> None:
-    print("Hello from cs4406-sem-project!")
+    from .cli import main as cli_main
+
+    cli_main()
