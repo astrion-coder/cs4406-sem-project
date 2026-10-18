@@ -26,3 +26,5 @@ Measurement machine: Intel i5-13500 (14 cores / 20 threads), 15 GB RAM, governor
 | With 4 workers, throughput saturates at ~130 QPS | 128.6 QPS at c=4, 132.2 at c=8, 132.0 at c=16 | `10_harness_validation.ipynb`, cell 11 [exec 6] |
 | Queueing appears only once concurrency exceeds the 4 workers | queue p50 0.3 ms at c≤4, 28.7 ms at c=8, 88.8 ms at c=16 | `10_harness_validation.ipynb`, cell 11 [exec 6] |
 | Per-query service time rises with concurrency even below capacity | service p50 13.2 ms (c=1) → 17.2 (c=2) → 24.4 (c=4) | `10_harness_validation.ipynb`, cell 11 [exec 6] |
+
+# Just for test
