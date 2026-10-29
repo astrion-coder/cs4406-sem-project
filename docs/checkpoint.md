@@ -13,8 +13,8 @@ Verifiable private information retrieval (PIR) lets a client fetch a record priv
 
 ## Done: the build gate (G0) passes
 
-- `make setup` pins the three codebases and their `dpf-go` dependency at fixed commits. `make build` applies build-only patches, each justified in `patches/README.md`. `make test` runs every upstream test suite.
-- All five suites pass on arm64: SimplePIR, apir-code, dpf-go, VeriSimplePIR, and our DPF equivalence check (`notebooks/01_g0_upstream_tests.ipynb`, cell 1).
+- `make setup` pins the three codebases and their `dpf-go` dependency at fixed commits. `make build` applies our patches, each justified in `patches/README.md`. `make test` runs every upstream test suite.
+- All five suites pass on arm64: SimplePIR, apir-code, dpf-go, VeriSimplePIR, and our DPF equivalence check (`notebooks/01_g0_upstream_tests.ipynb`, cell 1). Two caveats apply. apir-code's `TestReal*` tests are skipped because they need a separately downloaded PGP key dump. VeriSimplePIR builds only with three macOS fixes that still need sign-off (see below).
 - We rewrote the four x86-only AES helpers in `dpf-go` with Go's standard AES library. DPF keys made on either architecture give identical outputs on the other in all 66 test instances.
 - `docs/upstream_call_sequences.md` traces how each of the eight arms runs and where it verifies.
 
@@ -22,7 +22,7 @@ Verifiable private information retrieval (PIR) lets a client fetch a record priv
 
 - **M0 is not the paper's baseline at our pinned commit.** Its two-server client sends DPF keys, added in October 2024 (commit `9940e0a`), after the 2023 paper. Earlier commits send plain XOR vectors.
 - The SimplePIR and VeriSimplePIR benchmarks skip real preprocessing by default, so our adapters must call the real setup path.
-- The single-server LWE arm returns one bit per query and accepts only three database sizes, so our record-size grid does not map onto it directly.
+- The single-server LWE arm returns one bit per query, and the upstream simulation driver runs it at only three database sizes. Our record-size grid does not map onto it directly.
 - The 1 GiB VeriSimplePIR cells may not fit in 16 GiB. We will record them as out of memory, not shrink them.
 
 ## Next
