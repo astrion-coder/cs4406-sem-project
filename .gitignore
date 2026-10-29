@@ -11,7 +11,7 @@ wheels/
 
 # Updates file
 updates.md
-# Datasets, indexes, encoded vectors (large)
+# Large generated data
 data/
 .DS_Store
 .ipynb_checkpoints/

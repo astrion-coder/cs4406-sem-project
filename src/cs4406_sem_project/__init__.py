@@ -1,4 +1,1 @@
-def main() -> None:
-    from .cli import main as cli_main
-
-    cli_main()
+"""Benchmark harness for the verifiable-PIR study (see vpir_bench_spec.md)."""

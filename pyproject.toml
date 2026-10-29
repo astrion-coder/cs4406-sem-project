@@ -1,28 +1,19 @@
 [project]
 name = "cs4406-sem-project"
 version = "0.1.0"
-description = "Add your description here"
+description = "The Price of Verifiability in PIR: a common-hardware benchmark of verifiable PIR schemes"
 readme = "README.md"
 authors = [
     { name = "ImanKalyanChakraborty", email = "imankc1975@gmail.com" }
 ]
-requires-python = ">=3.12"
+requires-python = "==3.11.*"
 dependencies = [
-    "bm25s>=0.3.13",
-    "faiss-cpu>=1.15.1",
-    "ir-datasets>=0.6.3",
-    "ir-measures>=0.4.3",
     "matplotlib>=3.11.2",
-    "numpy>=2.5.3",
+    "numpy>=2.4.6",
     "pandas>=3.0.6",
     "psutil>=7.2.2",
     "pyarrow>=25.0.1",
-    "pyseismic-lsr>=0.5.2",
-    "pystemmer>=3.1.0",
 ]
-
-[project.scripts]
-cs4406-sem-project = "cs4406_sem_project:main"
 
 [build-system]
 requires = ["uv_build>=0.12.1,<0.13.0"]
