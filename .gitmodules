@@ -1,0 +1,12 @@
+[submodule "third_party/simplepir"]
+	path = third_party/simplepir
+	url = https://github.com/ahenzinger/simplepir
+[submodule "third_party/verisimplepir"]
+	path = third_party/verisimplepir
+	url = https://github.com/leodec/verisimplepir
+[submodule "third_party/apir-code"]
+	path = third_party/apir-code
+	url = https://github.com/dedis/apir-code
+[submodule "third_party/dpf-go"]
+	path = third_party/dpf-go
+	url = https://github.com/dkales/dpf-go
