@@ -87,7 +87,7 @@ Use **only the authors' reference implementations**. The coding agent must **not
 k0, k1 := dpf.Gen(uint64(c.state.iy), uint64(bits.Len(uint(c.dbInfo.NumColumns))))
 ```
 
-So each of the two servers receives a DPF key, and the query that M0 sends is DPF-compressed. Check this against Colombo et al. (§6 and §7.1) and confirm whether M0, as the code implements it, is the baseline the paper measured. Until the humans answer, the agent builds M0 as the table describes and does not change the arm or the scheme descriptions in this section.
+So each of the two servers receives a DPF key, and the query that M0 sends is DPF-compressed. The DPF path arrived in commit `9940e0a` ("dpf + vector", 2024-10-16), after the paper. Before it, `Query` sent XOR secret shares for every server count, and the pinned code still does for any count other than two (`docs/upstream_call_sequences.md`). Pinning apir-code before `9940e0a` would restore the XOR query. Check this against Colombo et al. (§6 and §7.1) and confirm whether M0, as the code implements it, is the baseline the paper measured. Until the humans answer, the agent builds M0 as the table describes and does not change the arm or the scheme descriptions in this section.
 
 **No arm requires new cryptographic code.** A DPF-based two-server baseline (e.g. `google/distributed_point_functions`) is deliberately out of scope: no published authenticated DPF point-query scheme exists to pair it with, and Colombo et al. use DPF/FSS only for predicate queries.
 
