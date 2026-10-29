@@ -44,9 +44,11 @@ class Result:
 
 
 SUITES: tuple[Suite, ...] = (
-    Suite("simplepir", "third_party/simplepir/pir", ("go", "test", "-timeout", "60m")),
-    Suite("apir-code", "third_party/apir-code", ("go", "test", "-timeout", "60m", ".")),
-    Suite("dpf-go", "third_party/dpf-go", ("go", "test", "-timeout", "60m", "./dpf")),
+    Suite("simplepir", "third_party/simplepir/pir", ("go", "test", "-count=1", "-timeout", "60m")),
+    # TestReal* (key_test.go) read the SKS PGP key dump the apir-code README downloads separately
+    # into data/sks/. They test the Keyd demo application, not the benchmark arms.
+    Suite("apir-code", "third_party/apir-code", ("go", "test", "-count=1", "-timeout", "60m", "-skip", "^TestReal", ".")),
+    Suite("dpf-go", "third_party/dpf-go", ("go", "test", "-count=1", "-timeout", "60m", "./dpf")),
     Suite(
         "verisimplepir",
         "third_party/verisimplepir",

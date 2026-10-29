@@ -1,0 +1,28 @@
+diff --git a/lib/matrix/matrix.go b/lib/matrix/matrix.go
+index 4774d85..9405c11 100644
+--- a/lib/matrix/matrix.go
++++ b/lib/matrix/matrix.go
+@@ -9,7 +9,8 @@ import (
+ )
+ 
+ /*
+-#cgo CFLAGS: -std=c99 -O3 -march=native -msse4.1 -maes -mavx2 -mavx
++#cgo CFLAGS: -std=c99 -O3 -march=native
++#cgo amd64 CFLAGS: -msse4.1 -maes -mavx2 -mavx
+ #include <matrix.h>
+ */
+ import "C"
+diff --git a/lib/matrix/matrix128.go b/lib/matrix/matrix128.go
+index a0f6ab2..07de6f2 100644
+--- a/lib/matrix/matrix128.go
++++ b/lib/matrix/matrix128.go
+@@ -9,7 +9,8 @@ import (
+ )
+ 
+ /*
+-#cgo CFLAGS: -std=c99 -O3 -march=native -msse4.1 -maes -mavx2 -mavx
++#cgo CFLAGS: -std=c99 -O3 -march=native
++#cgo amd64 CFLAGS: -msse4.1 -maes -mavx2 -mavx
+ #include <matrix.h>
+ */
+ import "C"
