@@ -15,14 +15,16 @@ import sys
 import tempfile
 from pathlib import Path
 
+# AppKit's HTML import scales CSS pt by 4/3 and then treats the result as points, so sizes are
+# given in px, which it takes as points.
 CSS = """
-body { font-family: Helvetica; font-size: 9.5pt; }
-h1 { font-size: 13pt; margin: 0 0 2pt 0; }
-h2 { font-size: 10.5pt; margin: 6pt 0 1pt 0; }
-h3 { font-size: 9.5pt; margin: 4pt 0 1pt 0; }
-p { margin: 0 0 2pt 0; }
-p.li { margin: 0 0 1pt 10pt; text-indent: -9pt; }
-code { font-family: Menlo; font-size: 8.5pt; }
+body { font-family: Helvetica; font-size: 10.5px; }
+h1 { font-size: 14px; margin: 0 0 2px 0; }
+h2 { font-size: 11.5px; margin: 6px 0 1px 0; }
+h3 { font-size: 10.5px; margin: 4px 0 1px 0; }
+p { margin: 0 0 2px 0; }
+p.li { margin: 0 0 1px 10px; text-indent: -9px; }
+code { font-family: Menlo; font-size: 9.5px; }
 """
 
 
