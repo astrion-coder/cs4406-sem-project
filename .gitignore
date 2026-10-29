@@ -15,3 +15,5 @@ updates.md
 data/
 .DS_Store
 .ipynb_checkpoints/
+logs/
+.audit/
