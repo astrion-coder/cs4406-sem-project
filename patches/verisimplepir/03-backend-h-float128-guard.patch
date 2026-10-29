@@ -1,0 +1,16 @@
+diff --git a/src/lib/math/backend.h b/src/lib/math/backend.h
+index 70e2bc6..6f52cd3 100644
+--- a/src/lib/math/backend.h
++++ b/src/lib/math/backend.h
+@@ -90,9 +90,11 @@ namespace lbcrypto
+     typedef std::vector<double> fv32;
+     typedef long double fl64;
+     typedef std::vector<fl64> fv64;
++#if defined(__SIZEOF_FLOAT128__)
+     typedef __float128 fl128;
+     // typedef float128 fl128;
+     typedef std::vector<fl128> fv128;
++#endif
+ 
+     typedef BigUnsigned ubi;
+     typedef std::vector<ubi> uvbi;

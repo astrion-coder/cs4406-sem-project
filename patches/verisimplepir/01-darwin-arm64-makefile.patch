@@ -1,0 +1,44 @@
+diff --git a/Makefile b/Makefile
+index b76d3e4..a0ce65c 100644
+--- a/Makefile
++++ b/Makefile
+@@ -7,12 +7,16 @@ SYSTEM ?= $(HOST_SYSTEM)
+ 
+ CPPSTD := -std=c++17 -fPIC 
+ 
++ARCH := $(shell uname -m)
++
+ ifeq ($(SYSTEM),Darwin)
+-CC := /usr/local/opt/llvm/bin/clang++ $(CPPSTD)
+-LDFLAGS += -L/usr/local/opt/llvm/lib -Wl,-rpath,/usr/local/opt/llvm/lib, -L/usr/local/lib
+-CPPFLAGS += -I/usr/local/opt/llvm/include -I/usr/local/opt/llvm/include/c++/v1/
++LLVM_PREFIX ?= $(shell brew --prefix llvm)
++OPENSSL_PREFIX ?= $(shell brew --prefix openssl@3)
++CC := $(LLVM_PREFIX)/bin/clang++ $(CPPSTD)
++LDFLAGS += -L$(LLVM_PREFIX)/lib -Wl,-rpath,$(LLVM_PREFIX)/lib -L$(OPENSSL_PREFIX)/lib
++CPPFLAGS += -I$(LLVM_PREFIX)/include -I$(LLVM_PREFIX)/include/c++/v1/ -I$(OPENSSL_PREFIX)/include
+ LIBSUFFIX := .dylib
+-LIBCMD := -dynamiclib -undefined suppress -flat_namespace
++LIBCMD := -dynamiclib -undefined suppress -flat_namespace -L$(OPENSSL_PREFIX)/lib
+ else
+ CC := clang++ $(CPPSTD) -Wloop-analysis
+ # Suppress warnings from alignment of STL structs of blocks
+@@ -23,12 +27,17 @@ endif
+ 
+ RDYNAMIC := -rdynamic
+ 
++ifneq ($(SYSTEM),Darwin)
+ LDFLAGS += -lrt
++endif
+ 
+ #main best performance configuration for parallel operation - cross-platform
+ CPPFLAGS += -O3
+ # CPPFLAGS += -O0 -g
+-CPPFLAGS += -maes -msse4 -Wall -fno-omit-frame-pointer
++ifneq ($(filter x86_64 amd64 i386 i686,$(ARCH)),)
++CPPFLAGS += -maes -msse4
++endif
++CPPFLAGS += -Wall -fno-omit-frame-pointer
+ 
+ #build and bin directory
+ BUILDDIR := build

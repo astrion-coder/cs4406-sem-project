@@ -1,0 +1,16 @@
+diff --git a/src/lib/math/block.h b/src/lib/math/block.h
+index 73ad5b1..75f45bf 100644
+--- a/src/lib/math/block.h
++++ b/src/lib/math/block.h
+@@ -3,8 +3,11 @@
+ #include <cstdint>
+ #include <array>
+ #include <iostream>
++#include <type_traits>
++#ifdef OC_ENABLE_SSE2
+ #include <emmintrin.h>
+ #include <smmintrin.h>
++#endif
+ 
+ 
+ namespace osuCrypto

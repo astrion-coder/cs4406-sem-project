@@ -1,0 +1,26 @@
+diff --git a/src/lib/bigint/BigUnsigned.cpp b/src/lib/bigint/BigUnsigned.cpp
+index 7996238..1664cab 100644
+--- a/src/lib/bigint/BigUnsigned.cpp
++++ b/src/lib/bigint/BigUnsigned.cpp
+@@ -11,6 +11,8 @@ BigUnsigned::BigUnsigned(unsigned short x) { initFromPrimitive      (x); }
+ BigUnsigned::BigUnsigned(         long  x) { initFromSignedPrimitive(x); }
+ BigUnsigned::BigUnsigned(         int   x) { initFromSignedPrimitive(x); }
+ BigUnsigned::BigUnsigned(         short x) { initFromSignedPrimitive(x); }
++BigUnsigned::BigUnsigned(unsigned long long x) { initFromPrimitive      (x); }
++BigUnsigned::BigUnsigned(         long long x) { initFromSignedPrimitive(x); }
+ 
+ unsigned long  BigUnsigned::toUnsignedLong () const { return convertToPrimitive      <unsigned long >(); }
+ unsigned int   BigUnsigned::toUnsignedInt  () const { return convertToPrimitive      <unsigned int  >(); }
+diff --git a/src/lib/bigint/BigUnsigned.h b/src/lib/bigint/BigUnsigned.h
+index 6e75a19..4001367 100644
+--- a/src/lib/bigint/BigUnsigned.h
++++ b/src/lib/bigint/BigUnsigned.h
+@@ -56,6 +56,8 @@ public:
+ 	// Constructors from primitive integer types
+ 	BigUnsigned(unsigned long  x);
+ 	BigUnsigned(         long  x);
++	BigUnsigned(unsigned long long x);
++	BigUnsigned(         long long x);
+ 	BigUnsigned(unsigned int   x);
+ 	BigUnsigned(         int   x);
+ 	BigUnsigned(unsigned short x);
