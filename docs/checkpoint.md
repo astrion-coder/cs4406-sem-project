@@ -8,9 +8,12 @@ Verifiable private information retrieval (PIR) lets a client fetch a record priv
 
 ## Progress so far
 
-- All three codebases now build and pass their own test suites natively on Apple silicon (6 performance and 2 efficiency cores, 16 GiB RAM). One command pins each codebase and its `dpf-go` dependency to a fixed commit, applies small portability patches, builds everything, and runs every test suite. Two caveats apply. We skip apir-code's tests that need a separately downloaded PGP key dump. VeriSimplePIR builds only with three small source fixes we still have to approve.
-- `dpf-go` had x86-only assembly. We rewrote its four AES helpers with Go's standard AES library. DPF keys made on either architecture give identical outputs on the other in all 66 test instances.
-- We traced how each of the eight scheme configurations runs and where it verifies, as groundwork for the measurement code.
+- **All three codebases build and pass their own test suites natively on Apple silicon** (6 performance and 2 efficiency cores, 16 GiB RAM). The papers' code targets x86 Linux, so this first phase was a port. We skip only apir-code's tests that need a separately downloaded PGP key dump.
+- **The build is reproducible with one command.** Each codebase and its `dpf-go` dependency is pinned to a fixed commit. The same command applies our patches, builds everything, runs every test suite, and writes a log and a pass or fail summary for each suite.
+- **Every change to upstream code is a small patch file with a written reason.** Most change only compiler flags and library paths. VeriSimplePIR also needs three small source fixes for macOS (a missing header, an unused 128-bit float type, and two integer constructors). None of them changes what the code computes.
+- **We ported `dpf-go` to Apple silicon and proved the port exact.** Its four AES helpers existed only as x86 assembly, and we rewrote them with Go's standard AES library. DPF keys made on either architecture give identical outputs on the other in all 66 test instances, with the x86 build running under Rosetta 2. A port with one output bit flipped fails this check.
+- **Every run records its machine and toolchain.** That covers the CPU, cores, memory, OS, compiler versions, and the pinned commits. Each result carries a platform tag, so we cannot mix numbers from different machines.
+- **We traced how each of the eight scheme configurations runs.** For each one we recorded the setup and query call sequence, the message types we will measure, and where verification happens. VeriSimplePIR verifies in a separate call. Colombo et al.'s LWE and Merkle clients verify inside reconstruction, so we can time their verification only together with decoding.
 
 ## Findings
 
@@ -19,15 +22,6 @@ Verifiable private information retrieval (PIR) lets a client fetch a record priv
 - The single-server LWE scheme returns one bit per query, and the upstream simulation driver runs it at only three database sizes. Our record-size grid does not map onto it directly.
 - The 1 GiB VeriSimplePIR cells may not fit in 16 GiB. We will record them as out of memory, not shrink them.
 
-## Plan
+## What is left
 
-1. Week of 2 November: measurement adapters for all eight configurations, each with correctness and fault-injection tests.
-2. Week of 9 November: an automated grid runner, a small end-to-end run that draws every figure, and a reproduction of the published overhead ratios.
-3. Week of 16 November: the full grid (databases from 1 MiB to 1 GiB, records from 32 B to 8 KiB), overhead ratios with confidence intervals, amortised cost per query, and the report.
-
-## Open questions
-
-- Which two-server baseline to measure: the paper's XOR version (an earlier commit) or the current DPF version.
-- How to map record sizes onto the one-bit LWE scheme.
-- Whether to accept three VeriSimplePIR source fixes for macOS. They change no computation, but everything else we patch is a build setting.
-- Licence: apir-code is GPL-3.0, which may make our code GPL.
+We still have to write the measurement adapters for all eight configurations, with correctness and fault-injection tests, and an automated runner for the grid of databases from 1 MiB to 1 GiB and records from 32 B to 8 KiB. With these we will first reproduce the papers' published overhead ratios, then run the full grid. The report will give overhead ratios with confidence intervals, amortised cost per query, and the number of queries at which each scheme's setup cost pays off.
