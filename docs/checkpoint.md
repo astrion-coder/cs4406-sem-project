@@ -34,3 +34,5 @@ If time allows, we also measure many concurrent clients, multicore scaling, and 
 ## What is left
 
 We still have to write measurement adapters for all eight configurations, with correctness and fault-injection tests, and an automated runner for databases from 1 MiB to 1 GiB. With these we will first reproduce the papers' published overhead ratios. Then we will run the full grid and the recovery experiments, and report overhead ratios with confidence intervals.
+
+In our first discussions with Prof. Nelakanti, we planned to propose a new PIR scheme with zero-knowledge proofs, building on Iman's background in that area. We set it aside because of time constraints, and would like to pursue it after the course if Prof. Nelakanti has time.
