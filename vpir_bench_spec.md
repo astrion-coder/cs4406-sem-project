@@ -1,9 +1,9 @@
 # Implementation Spec — *The Price of Verifiability in PIR: an independent, common-hardware re-evaluation*
 
-**Project:** CS4406 semester project · **Spec version:** 1.3 (2026-10-30). v1.3 runs everything natively on macOS on one Apple-silicon Mac, with a Homebrew toolchain, all code under `src/`, and one arm64 exception to rule 1 for dpf-go (§10 rule 1a). v1.2 corrected M0 (classic XOR two-server PIR, not DPF) and the Colombo et al. targets after checking the paper. v1.1 added query-volume, network, concurrency, multicore and measured-recovery experiments (RQ3a/3b, RQ4, RQ6, RQ7) and the prior-coverage table (§2.1).
+**Project:** CS4406 semester project · **Spec version:** 1.4 (2026-11-09). v1.4 records the humans' answers to the [HUMAN] questions (decisions 1 to 17 in `plan.md`), pins apir-code to the commit before DPF queries were added, and removes the dpf-go arm64 port. v1.3 runs everything natively on macOS on one Apple-silicon Mac, with a Homebrew toolchain and all code under `src/`. v1.2 corrected M0 (classic XOR two-server PIR, not DPF) and the Colombo et al. targets after checking the paper. v1.1 added query-volume, network, concurrency, multicore and measured-recovery experiments (RQ3a/3b, RQ4, RQ6, RQ7) and the prior-coverage table (§2.1).
 **Audience:** a coding LLM (or engineer) building the benchmark harness, plus the student team who own the scientific decisions.
 
-> **How to use this document.** Sections 1–3 give the scientific context; the coding agent should read them but not change them. Sections 4–11 are the build contract. Appendix A is a prompt you can paste in front of this spec. Anything marked **[HUMAN]** is a decision or check the students must make; the coding agent must stop and ask instead of guessing.
+> **How to use this document.** Sections 1–3 give the scientific context; the coding agent should read them but not change them. Sections 4–11 are the build contract. Appendix A is a prompt you can paste in front of this spec. Anything marked **[HUMAN]** is a decision or check the students must make; the coding agent must stop and ask instead of guessing. "Decision N" refers to the humans' numbered decisions in `plan.md`.
 
 ---
 
@@ -28,19 +28,19 @@ A negative result for any hypothesis is a valid result. The harness must not be 
 
 ### 2.1 Prior coverage vs. this project's contribution
 
-This table is based on the authors' code, configs and READMEs and on earlier targeted searches, not on a full reading of all three papers. **[HUMAN]** Confirm each "partly" row against the PDFs before writing the novelty claim.
+This table is based on the authors' code, configs and READMEs. The humans have checked the "Status here" column against the Colombo et al. and VeriSimplePIR PDFs. None of the three papers reports amortised cost or break-even *Q*, network conditions other than 10 GbE, measured multicore scaling, concurrent clients, or recovery cost after a rejection.
 
 | Aspect | What the authors did | Status here |
 |---|---|---|
 | SimplePIR baseline numbers | Reported for the paper's 1 GB headline configuration | Reproduce (RQ1) |
-| VeriSimplePIR vs SimplePIR (incl. offline cost, client storage) | Reported by the VeriSimplePIR authors | Reproduce (RQ1) |
+| VeriSimplePIR vs SimplePIR (incl. offline cost, client storage) | Reported by the VeriSimplePIR authors, from 4 GiB up, with ratios against 32-bit SimplePIR | Reproduce (RQ1) against the paper's 64-bit SimplePIR bars (decision 6). Communication at the paper's sizes analytically with `params.cpp`, compute at our sizes (decision 7) |
 | Two-server classic (XOR) PIR vs Merkle APIR, 1 KiB records, DB up to 10 GiB; 2–5 servers at 1 GiB; single-server LWE/LWE+/DDH vs SimplePIR (1-bit retrieval, 1 KiB–1 GiB DBs) | Reported by Colombo et al. (§7.1, §7.3, Figs 3, 4, 6; 30 runs, median, one core per machine) | Reproduce (RQ1) |
 | All verifiable families on one machine and one harness | Each paper compares against its own baseline. Cross-paper comparisons, if any, may reuse other papers' numbers | **New** (RQ2/RQ3a) |
 | Record-size sweep; small databases for the lattice schemes | Each paper fixes its own record size | **New** (RQ2) |
-| Query volume (1–1 000 queries per setup) | Papers report offline and online cost separately | **Partly new**: side-by-side amortised cost and break-even *Q* across families (RQ3a) |
-| Network conditions | Colombo et al. ran multi-server experiments on separate machines over **10 GbE only**; single-server schemes ran client and server on one machine. apir-code ships `simulations/real/` scripts | **Partly new**: the same three network profiles for all schemes, modelled and validated with emulated links (RQ3b) |
+| Query volume (1–1 000 queries per setup) | Papers report offline and online cost separately | **New**: no paper reports amortised cost or break-even *Q* (RQ3a) |
+| Network conditions | Colombo et al. ran multi-server experiments on separate machines over **10 GbE only**; single-server schemes ran client and server on one machine. apir-code ships `simulations/real/` scripts | **New**: no paper reports a network other than 10 GbE. The same three profiles for all schemes, modelled and validated with emulated links (RQ3b) |
 | Many concurrent clients | Not found in any of the three codebases' benchmarks; the published metrics are single-query latency and per-core throughput | **New** (RQ6) |
-| Multicore server | Colombo et al. ran all experiments on **one core per machine** and only *estimate* (not measure) that a multithreaded Merkle-APIR deployment needs 12 cores vs 11 for unauthenticated PIR (§7.4). apir-code servers nonetheless take a `cores` argument defaulting to `runtime.NumCPU()`; the SimplePIR and VeriSimplePIR library files scanned contain no threading | **Partly new**: overhead ratio vs core count under identical conditions (RQ7) |
+| Multicore server | Colombo et al. ran all experiments on **one core per machine** and only *estimate* (not measure) that a multithreaded Merkle-APIR deployment needs 12 cores vs 11 for unauthenticated PIR (§7.4). apir-code servers nonetheless take a `cores` argument defaulting to `runtime.NumCPU()`; the SimplePIR and VeriSimplePIR library files scanned contain no threading | **New**: no paper measures multicore scaling. Overhead ratio vs core count under identical conditions (RQ7) |
 | Detection of corrupted responses | Security proofs; upstream tests check correctness of honest runs | **New as measurement** (fault-injection tests, RQ4) |
 | Cost of recovery after a rejection (retry / switch / re-preprocess) | Not measured | **New** (RQ4) |
 | Update cost across schemes | Not in these three; 2025–26 preprints (TAPIR, LWE-AuthIncPIR) start to study it | **New for cross-scheme comparison** (RQ5) |
@@ -48,46 +48,39 @@ This table is based on the authors' code, configs and READMEs and on earlier tar
 
 ## 3. Published reference values (reproduction targets for RQ1)
 
-These come from the papers and READMEs surveyed earlier. **[HUMAN]** Re-check each against the PDF and record the table or figure number in `docs/reproduction_targets.md` before comparing.
+These come from the papers and READMEs surveyed earlier. The humans have checked the Colombo et al. and VeriSimplePIR rows against the PDFs. `docs/reproduction_targets.md` (owned by SG) holds the full table, with each value's figure or table number, page and database setup. Earlier versions listed VeriSimplePIR's "~800 MB persistent client storage" as a target. That number belongs to a password-checking application on an 8 GB database, not a headline setup, so it is dropped (decision 8).
 
 | Source | Claim | What we compare |
 |---|---|---|
 | SimplePIR README (Henzinger et al., USENIX Sec '23) | 1 GB DB of 2^33 1-bit entries: ~121 MB hint, ~242 KB online communication, ~10 GB/s/core server throughput (AWS c5n.metal) | Hint and online bytes exactly; throughput within a hardware factor |
 | SimplePIR README | DoublePIR, same DB: 16 MB hint, 345 KB online, 7.4 GB/s/core | Same (optional arm) |
-| VeriSimplePIR (de Castro & Lee, USENIX Sec '24) | Online communication ≈ 1.1–1.5× SimplePIR; online server compute ≈ SimplePIR | Ratio |
+| VeriSimplePIR (de Castro & Lee, USENIX Sec '24) | Online communication ≈ 1.1–1.5× SimplePIR; online server compute ≈ SimplePIR. The paper's headline ratios are against 32-bit SimplePIR, and its database sizes start at 4 GiB | Ratio against the paper's "SimplePIR (64-bit)" bars, because S0-cpp is 64-bit (decision 6). Communication at the paper's sizes analytically with `params.cpp`, compute at our sizes with a caveat (decision 7) |
 | VeriSimplePIR | Without the honest-digest assumption: 12–40 % slower compute, 40–50 % more total communication | Ratio |
-| VeriSimplePIR | ~800 MB persistent client storage at their headline size | Client-storage bytes |
-| Authenticated PIR (Colombo et al., USENIX Sec '23, §7.1, Fig 3), two servers, 1 KiB records, DB up to 10 GiB | Maximum measured overhead **2.9× user time, 1.8× bandwidth** versus classic unauthenticated two-server PIR; overheads grow with DB size (O(λ log N) Merkle proof per record). The introduction rounds this to "less than 2.7× computational" | Ratio across DB sizes; trend with N |
+| Authenticated PIR (Colombo et al., USENIX Sec '23, §7.1, Fig 3), two servers, 1 KiB records, DB up to 10 GiB | Maximum measured overhead **2.9× user time, 1.8× bandwidth** versus classic unauthenticated two-server PIR; overheads grow with DB size (O(λ log N) Merkle proof per record). The introduction says "2.7×", which contradicts §7.1. We use 2.9× | Ratio across DB sizes; trend with N |
 | Colombo et al. §7.1, Fig 4 | Same comparison for 2–5 servers at 1 GiB | Ratio vs server count (Tier 3, M1-k) |
-| Colombo et al. §7.3, Fig 6, single server, 1-bit retrieval, DB 1 KiB–1 GiB | SimplePIR (default 2048-bit records) is **30–100× faster than LWE+** (integrity-amplified LWE, t = 7, 15 repetitions); LWE+ beats LWE at 1 KiB/1 MiB but is 1.4× slower at 1 GiB; **DDH takes over an hour at 1 GiB** | Ratios; LWE/LWE+ crossover |
+| Colombo et al. §7.3, Fig 6, single server, 1-bit retrieval, DB 1 KiB–1 GiB | SimplePIR (default 2048-bit records) is **30–100× faster than LWE+** (integrity-amplified LWE; t = 7 and 15 repetitions at 1 GiB for the 2^-64 integrity target, p.3845–3846); LWE+ beats LWE at 1 KiB/1 MiB but is 1.4× slower at 1 GiB; **DDH takes over an hour at 1 GiB** | Ratios; LWE/LWE+ crossover |
 | Colombo et al. §7.4 (Keyd, 3.56 M PGP keys, ≈ 3 GiB) | Authenticated lookup 1.11 s vs 1.10 s unauthenticated (client-perceived, two servers) | Optional sanity point if a comparable DB is built |
 
 The setup Colombo et al. used for all of these: 2× Intel Xeon E5-2680 v3 (Haswell, 2.5 GHz), 256 GB RAM, Ubuntu 20.04, Go 1.17.5, 10 GbE. Client and servers ran on separate machines for multi-server schemes and on one machine for single-server schemes. One core per machine, 30 runs, median reported. Our ratios should match within CIs; absolute times will differ by hardware.
 
 ## 4. Arms (schemes under test)
 
-Use **only the authors' reference implementations**. The coding agent must **not** implement or modify any cryptography; only build fixes, adapters and instrumentation are allowed (see §10). The single exception is the dpf-go arm64 port in §10 rule 1a.
+Use **only the authors' reference implementations**. The coding agent must **not** implement or modify any cryptography; only build fixes, portability fixes, adapters and instrumentation are allowed (see §10).
 
 | Arm | Scheme | Setting | Verifiable? | Source repo (lang) | Entry point to wrap |
 |---|---|---|---|---|---|
 | **S0-go** | SimplePIR | 1 server, LWE | No | `github.com/ahenzinger/simplepir` (Go + C, MIT) | package `pir`: `RunPIR` / `RunPIRCompressed` in `pir/pir.go` show the full call sequence |
-| **S0-cpp** | SimplePIR (as re-implemented in the VeriSimplePIR codebase) | 1 server, LWE | No | `github.com/leodec/verisimplepir` (C++, MIT) | `VeriSimplePIR(N, d, …, simplePIR=true, preproc=false)`; see `src/demo/bench/simplepir_bench.cpp` |
-| **S1** | VeriSimplePIR, honest-digest assumption | 1 server, LWE | Yes | same | `VeriSimplePIR(N, d, …, preproc=true, honestHint=true)`; `src/demo/bench/preproc_pir_bench.cpp` |
-| **S2** | VeriSimplePIR, full (no honest-digest assumption) | 1 server, LWE | Yes | same | `preproc=true, honestHint=false` |
-| **S3** | Single-server authenticated PIR, LWE (paper's "LWE"; `cmp-vpir-lwe-128` may correspond to the 128-bit-modulus variant. **[HUMAN]** confirm which primitive implements integrity-amplified "LWE+" before running) | 1 server | Yes | `github.com/dedis/apir-code` (Go, GPL-3.0; module path `github.com/si-co/vpir-code`) | primitive `cmp-vpir-lwe` (and `cmp-vpir-lwe-128`) in `simulations/simul.go`; `client.NewLWE`, `database.CreateRandomBinaryLWEWithLength` |
-| **S4** | Single-server authenticated PIR, DDH (P-256). Paper: > 1 h per query at 1 GiB, so run S4 only on DB ≤ 128 MiB, and record larger cells as `status=timeout` after a 30 min cap | 1 server | Yes | same | primitive `cmp-vpir-dh`; `database.CreateRandomEllipticWithDigest` |
-| **M0** | Two-server classic PIR (Chor-style XOR over the binary field, `fastxor`; the same scheme Merkle APIR is built on, §6 of the paper) | 2 servers, non-colluding | No | same | `client.NewPIR`, `server.NewPIRTwo`, `database.CreateRandomBytes`; see `pir_test.go::retrievePIRPoint` |
-| **M1** | Two-server Merkle authenticated PIR | 2 servers | Yes | same | `database.CreateRandomMerkle`; see `merkle_test.go::retrieveBlocksMerkle` (verification happens inside `Reconstruct`; **confirm by reading `lib/client`**) |
+| **S0-cpp** | SimplePIR (as re-implemented in the VeriSimplePIR codebase), 64-bit (`mat.h:18`), so it matches the paper's "SimplePIR (64-bit)" bars (decision 6) | 1 server, LWE | No | `github.com/leodec/verisimplepir` (C++, MIT) | `VeriSimplePIR(N, d, …, simplePIR=true, preproc=false)`; see `src/demo/bench/simplepir_bench.cpp` |
+| **S1** | VeriSimplePIR, honest-digest assumption | 1 server, LWE | Yes | same | `VeriSimplePIR(N, d, …, preproc=true, honestHint=true)`; `src/demo/bench/preproc_pir_bench.cpp`. S1 and S2 make the same calls, preprocessing included. Only `honestHint` differs, and it changes parameter choice alone (paper §6 item 3, p.5941; `database.cpp:118-119`; decision 4) |
+| **S2** | VeriSimplePIR, full (no honest-digest assumption). Upstream does not implement the paper's one-time digest check `DigVer`, and we do not write it, so S2 runs without it (decision 5, §13) | 1 server, LWE | Yes | same | `preproc=true, honestHint=false`, with the same call sequence as S1 |
+| **S3** | Single-server authenticated PIR, integrity-amplified LWE (the paper's "LWE+"), through `NewAmplify`. `tECC` = 4, 5, 6, 7 at 2^23, 2^27, 2^30 and 2^33 bits (1 MiB, 16 MiB, 128 MiB, 1 GiB), computed with the authors' `scripts/integrity_amplification.py` at the paper's 2^-64 integrity target (p.3845). No sizes above 1 GiB (decision 9) | 1 server | Yes | `github.com/dedis/apir-code` (Go, GPL-3.0; module path `github.com/si-co/vpir-code`) | `client.NewAmplify`, `server.NewAmplify`, `database.CreateRandomBinaryLWEWithLength`; primitive `cmp-vpir-lwe` in `simulations/simul.go` ("LWE uses Amplify") and `amplify_test.go` show the call sequence |
+| **S4** | Single-server authenticated PIR, DDH (P-256). Paper: > 1 h per query at 1 GiB, so run S4 only on DB ≤ 128 MiB, with a 30 min cap per cell (decision 10). The digest build runs on one thread (decision 16) | 1 server | Yes | same | primitive `cmp-vpir-dh`; `database.CreateRandomEllipticWithDigest` |
+| **M0** | Two-server classic PIR (Chor-style XOR over the binary field, `fastxor`; the same scheme Merkle APIR is built on, §6 of the paper). At the pinned commit `Query` sends XOR secret shares to both servers (decision 2) | 2 servers, non-colluding | No | same | `client.NewPIR`, `server.NewPIRTwo`, `database.CreateRandomBytes`; see `pir_test.go::retrievePIRPoint` |
+| **M1** | Two-server Merkle authenticated PIR | 2 servers | Yes | same | `database.CreateRandomMerkle`; see `merkle_test.go::retrieveBlocksMerkle`. Verification happens inside `Reconstruct`, so M1 records `verify_fused=true` (decision 14) |
 | *opt.* DoublePIR | DoublePIR | 1 server | No | simplepir repo | Tier 3 |
 | *opt.* M1-k | Merkle APIR with k = 3–5 servers | k servers | Yes | apir-code | Tier 3 |
 
-**[HUMAN] Is M0 still the right baseline?** The table calls M0 classic XOR PIR, not DPF, but the pinned apir-code client builds its query with a DPF. `lib/client/pir_point.go` imports `github.com/dkales/dpf-go/dpf`, and `Query` calls:
-
-```go
-k0, k1 := dpf.Gen(uint64(c.state.iy), uint64(bits.Len(uint(c.dbInfo.NumColumns))))
-```
-
-So each of the two servers receives a DPF key, and the query that M0 sends is DPF-compressed. The DPF path arrived in commit `9940e0a` ("dpf + vector", 2024-10-16), after the paper. Before it, `Query` sent XOR secret shares for every server count, and the pinned code still does for any count other than two (`docs/upstream_call_sequences.md`). Pinning apir-code before `9940e0a` would restore the XOR query. Check this against Colombo et al. (§6 and §7.1) and confirm whether M0, as the code implements it, is the baseline the paper measured. Until the humans answer, the agent builds M0 as the table describes and does not change the arm or the scheme descriptions in this section.
+**M0 is the paper's baseline.** apir-code is pinned at `35cabd6` (2024-10-15), the commit before `9940e0a` ("dpf + vector", 2024-10-16) added DPF queries. At this pin `lib/client/pir_point.go` sends XOR secret shares for every server count, matching the paper's "uses fastxor" (§6). Only `lib/client/pir_point.go` and `lib/server/point.go` differ from the previous pin, so the LWE, DDH and Merkle code is the same (decision 2).
 
 **No arm requires new cryptographic code.** A DPF-based two-server baseline (e.g. `google/distributed_point_functions`) is deliberately out of scope: no published authenticated DPF point-query scheme exists to pair it with, and Colombo et al. use DPF/FSS only for predicate queries.
 
@@ -103,7 +96,11 @@ So each of the two servers receives a DPF key, and the query that M0 sends is DP
 Entries *N* = DB bytes / record bytes. Some arms take sizes in **bits** (apir-code's `DBBitLengths`; SimplePIR's `D` = bits per entry), so convert in exactly one place, in `src/cs4406_sem_project/harness/grid.py`.
 Also run the paper-native configurations (SimplePIR 2^33 × 1 bit; apir 1 KiB / 1 MiB / 1 GiB with 8192 bits retrieved) as RQ1 anchors. An anchor may not fit in 16 GiB. If it runs out of memory, record `status="oom"` and do not shrink the anchor.
 
-**Cells:** 4 sizes × 4 record sizes × 8 arms = 128, plus anchors. The harness must handle a scheme that rejects a parameter combination (e.g. VeriSimplePIR's `checkSISHardness()` assertion, or LWE parameter generation failing for `uint32_t`). Record it as `status="unsupported_params"` with the error message. **Never** change security parameters to force a cell to run.
+**One-bit schemes.** S3 (LWE+) and S4 (DDH) retrieve one bit per query, so they report cost per retrieved bit at each database size and are left out of the record-size sweep. S4 runs only at 1 MiB, 16 MiB and 128 MiB, with a 30-minute cap per cell (decision 10).
+
+**S0-go records over 64 bits.** The adapter sends one query and runs one `Recover` per 64-bit piece. The pieces sit in the same database column, which the single answer already covers (decision 11).
+
+**Cells:** 4 sizes × 4 record sizes × 6 arms (S0-go, S0-cpp, S1, S2, M0, M1) = 96, plus 4 sizes for S3 and 3 sizes for S4, so 103, plus anchors. The harness must handle a scheme that rejects a parameter combination (e.g. VeriSimplePIR's `checkSISHardness()` assertion, or LWE parameter generation failing for `uint32_t`). Record it as `status="unsupported_params"` with the error message. **Never** change security parameters to force a cell to run.
 
 **Repetitions:** online operations ≥ 30 (matches apir-code `simul.toml`); offline/preprocessing ≥ 5 for DB ≤ 128 MiB and ≥ 3 at 1 GiB. Discard 1 warm-up run per cell and record it separately.
 
@@ -140,13 +137,13 @@ Every metric is recorded per repetition, per phase, per party. Times are wall-cl
 | `server_preproc_s` | s | Server time to build hint/digest/Merkle tree from the DB. **Must use real preprocessing, not "fake" hints.** Both upstream benchmarks skip preprocessing with random hints for speed (SimplePIR `pir_test.go`; VeriSimplePIR `Fake*` functions). |
 | `server_preproc_proof_s` | s | VeriSimplePIR only: `PreprocAnswer` + `PreprocProve` time |
 | `client_offline_s` | s | Client offline work: e.g. `PreprocClientMessage`, `PreprocVerify`, `PreprocRecoverZ`, `VerifyPreprocZ` for S1/S2; 0 if none |
-| `offline_down_bytes` / `offline_up_bytes` | B | Hint, digest or offline messages. Measured as `len(serialize(msg))` **and** the analytical formula (VeriSimplePIR `src/demo/scripts/params.cpp`; SimplePIR `go test -run=BW`); store both and flag disagreement > 1 % |
+| `offline_down_bytes` / `offline_up_bytes` | B | Hint, digest or offline messages. Record the download two ways (decision 13): `offline_down_bytes_hint_only` counts the hint only, which is what the papers count, and `offline_down_bytes` counts the full download, including the public matrix or its seed. Measure each as `len(serialize(msg))` **and** the analytical formula (VeriSimplePIR `src/demo/scripts/params.cpp`; SimplePIR `go test -run=BW`); store both and flag disagreement > 1 % |
 | `client_storage_bytes` | B | Persistent client state between queries (hint, Z matrix, digest, keys). Serialised size |
 | `query_gen_s` | s | Client `Query` time |
 | `up_bytes` / `down_bytes` | B | Online query and answer sizes, all servers summed and per server |
 | `server_answer_s` | s | Server `Answer` time; for 2-server arms record each server separately and report the max (parallel) and the sum (total work) |
 | `client_recover_s` | s | Client reconstruction *excluding* verification, where the code separates them |
-| `client_verify_s` | s | Client verification (`PreVerify`, Merkle-proof check, integrity check). If verification is fused with reconstruction, put the total in `client_recover_s`, set this to `null` and set `verify_fused=true` |
+| `client_verify_s` | s | Client verification (`PreVerify`, Merkle-proof check, integrity check). If verification is fused with reconstruction, put the total in `client_recover_s`, set this to `null` and set `verify_fused=true`. M1 verifies inside `Reconstruct`, so it always records `verify_fused=true` (decision 14) |
 | `server_peak_rss_bytes`, `client_peak_rss_bytes` | B | Peak resident memory per party process, from `getrusage` or `/usr/bin/time -l`. `ru_maxrss` is in bytes on macOS and in KiB on Linux, so convert it in one place |
 | `throughput_GBps` | GB/s | DB bytes / `server_answer_s` |
 | `correct` | bool | Recovered record equals ground truth (always checked) |
@@ -168,15 +165,17 @@ The harness records no memory bandwidth. macOS exposes no uncore counters to use
 | Policy | Action after rejection | Applies to |
 |---|---|---|
 | `abort` | Stop and report failure | all verifiable arms |
-| `retry_same(k)` | Re-issue a fresh query to the same server(s), up to *k* = 3 times | arms whose security definition permits it (**[HUMAN]**: check selective-failure implications in each paper before enabling) |
+| `retry_same(k)` | Re-issue a fresh query to the same server(s), up to *k* = 3 times | no arm. Disabled for every arm (decision 12) |
 | `switch_replica` | Re-issue to an honest replica (single-server) or a different server pair (two-server) | all verifiable arms; the replica is modelled as honest |
-| `re_preprocess` | Discard client state, re-run the full offline phase (hint download + verification), then re-query | S1, S2 (and any arm whose offline state can be corrupted) |
+| `re_preprocess` | Discard client state, re-run the full offline phase (hint download + verification), then re-query | S1, S2 |
+
+The humans chose these policies (decision 12), following Colombo et al., whose client aborts on a rejected answer and never retries the same server (Table 2, p.3837). `retry_same` is therefore disabled for every arm. The enabled policies are `abort` and `switch_replica` for every verifiable arm, and `re_preprocess` for S1 and S2, which the VeriSimplePIR paper prescribes after a rejection (p.5936). This decision meets gate G5. If the humans later rule that "no retry" also forbids switching servers, the RQ4 runs shrink to detection plus `abort`.
 
 Expected cost under cheating rate *f* (RQ4) is reported **both** measured (the *f* sweep above) and computed from the measured component costs, and the two must agree within CIs.
 
 **Derived quantities** (computed in `src/cs4406_sem_project/analysis/`, never in adapters). Also: `overhead_under_load(C) = throughput_baseline(C)/throughput_verifiable(C)`, `overhead_vs_cores(W)` analogously, `latency_overhead(profile)`, and `recovery_cost_ratio = time_to_correct / fault-free latency`.
 - `overhead[metric] = median(verifiable) / median(baseline)` for the pairings in §4, with a **paired bootstrap 95 % CI** (10 000 resamples over repetitions).
-- `latency_e2e(profile) = query_gen + up_bytes/up_bw + RTT·rounds + server_answer(max) + down_bytes/down_bw + client_recover + client_verify`. Take `rounds` from each scheme's protocol: 1 for all point queries here unless the code shows otherwise. **[HUMAN] confirm.**
+- `latency_e2e(profile) = query_gen + up_bytes/up_bw + RTT·rounds + server_answer(max) + down_bytes/down_bw + client_recover + client_verify`. `rounds` is 1 for every arm: each query is one round trip, and LWE+ (S3) sends its 2t+1 sub-queries in that one round (decision 15).
 - `amortised_bytes(Q) = (offline_down + offline_up)/Q + up + down`; `amortised_client_s(Q)`, `amortised_server_s(Q)` analogously.
 - `break_even_Q(A, B)`: smallest Q at which arm A's amortised cost is ≤ arm B's.
 - Optional `$ per 1k queries` from `configs/prices.yaml`: CPU-hour and egress-GB prices **entered by the students with a date and source URL**. The agent must not invent prices.
@@ -187,21 +186,19 @@ Expected cost under cheating rate *f* (RQ4) is reported **both** measured (the *
 
 **The upstream code assumes x86-64.** These parts do not build on arm64 as shipped. §10 lists the patches that fix them:
 - `apir-code/lib/matrix/matrix.go` compiles C with `-march=native -msse4.1 -maes -mavx2 -mavx`. arm64 clang rejects the x86 flags.
-- apir-code's `lib/client` imports dpf-go. In dpf-go, `dpf/aes.go` has no build tags and declares `xor16`, `encryptAes128`, `aes128MMO` and `expandKeyAsm` without bodies. Their only implementation is `aes_amd64.s`, so `lib/client` does not compile on arm64, and S3, S4, M0 and M1 cannot run until §10 rule 1a is applied.
 - The VeriSimplePIR `Makefile` adds `-maes -msse4`, links `-lrt`, and points its Darwin branch at an Intel-Homebrew LLVM path (`/usr/local/opt/llvm`). The bundled cryptoTools `block.h` includes `<emmintrin.h>` and `<smmintrin.h>` with no guard, and clang rejects those headers on arm64.
 - SimplePIR uses `-march=native`; its README says the flag can be removed at some cost. Whether arm64 clang accepts it is checked at build time.
 
 Therefore:
 1. **Native arm64 builds only.** All three codebases build for `darwin/arm64` with the patches in `patches/`. `env/reference_platform.txt` contains `arm64-darwin-Apple M1 Pro`. The harness writes `platform` into every record, and `src/cs4406_sem_project/analysis/` refuses rows whose `platform` differs from `env/reference_platform.txt`.
-2. **Rosetta 2 builds produce correctness vectors only.** An x86-64 build run under Rosetta 2 may generate reference outputs for correctness checks (§10 rule 1a, `test_dpf_arm64_equivalence` in §11). **Timings from Rosetta 2 builds must never be recorded or reported.**
-3. Measurement hygiene on the reference machine:
+2. Measurement hygiene on the reference machine:
    - Run on AC power with Low Power Mode off. `make sysinfo` records the output of `pmset -g`.
    - Wrap every timing run in `caffeinate -dims` so the machine does not sleep.
    - Run no other workloads. Run each cell in a fresh process.
    - Run `sudo purge` between offline runs where possible.
    - macOS has no core pinning (no `taskset`). Single-threaded for the main grid and RQ1–RQ5 therefore means `GOMAXPROCS=1` and `cores=1` for apir-code servers, whose default is `runtime.NumCPU()`. The scheduler may still move a thread between performance and efficiency cores. Every record stores the thread settings it ran with in `scheme_params` and states that it ran unpinned.
    - RQ6/RQ7 vary threads explicitly. The load generator runs on the same Mac as the server and cannot be pinned to disjoint cores (§13). If `test_loadgen_not_bottleneck` fails, move the load generator to a second machine.
-4. Toolchain, installed from Homebrew by the humans:
+3. Toolchain, installed from Homebrew by the humans:
 
    | Tool | Version | Notes |
    |---|---|---|
@@ -211,20 +208,21 @@ Therefore:
    | iperf3 | Homebrew `iperf3` | RQ3b calibration only (P6). |
    | Python | 3.11 via uv | Harness and analysis. `pyproject.toml` and `uv.lock` pin it. |
 
-5. Pin each upstream repo to an **exact commit SHA** via git submodules. `third_party/PINS.md` records each SHA with its upstream URL and clone date. Last upstream activity: simplepir 2023-01, verisimplepir 2023-12, apir-code 2024-11.
+4. Pin each upstream repo to an **exact commit SHA** via git submodules. `third_party/PINS.md` records each SHA with its upstream URL and clone date. Last upstream activity: simplepir 2023-01, verisimplepir 2023-12, apir-code 2024-11.
 
    | Submodule | Upstream | Pinned commit |
    |---|---|---|
    | `third_party/simplepir` | `github.com/ahenzinger/simplepir` | `e9020b03bf2872c75b8954e749e32408b5db87ed` |
    | `third_party/verisimplepir` | `github.com/leodec/verisimplepir` | `3643bb7cbaae02da98a195c4d004d4d083e3ab88` |
-   | `third_party/apir-code` | `github.com/dedis/apir-code` | `7a7f2041bc1e0907ef089f8e8e55252ef7f18e0f` |
-   | `third_party/dpf-go` | `github.com/dkales/dpf-go` | `6eae873488482fc6f01307d55f74b33862de6840` (the commit in apir-code's `go.mod` pseudo-version) |
+   | `third_party/apir-code` | `github.com/dedis/apir-code` | `35cabd62fb898926f5bea6035caeae39091e091d` (2024-10-15, the commit before DPF queries, decision 2) |
 
-6. **Licence:** apir-code is GPL-3.0. Adapters that import it as a library are derived works, so release the project repo under GPL-3.0 (or keep the apir adapter in a separate GPL directory). **[HUMAN]** Confirm with the instructor.
+5. **Build scope for apir-code.** `make build` builds only apir-code's library packages `lib/client`, `lib/server` and `lib/database`, which the adapter imports. Upstream's `go.sum` is too old for Go 1.27 to build `cmd/grpc`, `lib/proto` and `simulations`, so the Makefile does not build them, and `cmd/grpc` cannot be reused for serve mode as shipped (§9).
+
+6. **Licence:** apir-code is GPL-3.0. The apir-code adapter imports it as a library, so `src/adapters/apir_go/` lives in its own directory with a GPL-3.0 licence file (decision 17). **[HUMAN]** IC confirms with Prof. Nelakanti before the repo is made public.
 
 ## 8. Repository layout to build
 
-The repository root is the project. Python code lives in the `cs4406_sem_project` package under `src/`. Adapters and the load generator also live under `src/`. Each phase creates only the directories it uses, so P0 creates the Makefile, `env/`, `third_party/`, `patches/`, `logs/`, `src/cs4406_sem_project/harness/sysinfo.py`, `src/adapters/apir_go/tools/dpfvectors/` and one notebook.
+The repository root is the project. Python code lives in the `cs4406_sem_project` package under `src/`. Adapters and the load generator also live under `src/`. Each phase creates only the directories it uses, so P0 creates the Makefile, `env/`, `third_party/`, `patches/`, `logs/`, `src/cs4406_sem_project/harness/sysinfo.py` and one notebook.
 
 ```
 <repo root>/
@@ -233,14 +231,14 @@ The repository root is the project. Python code lives in the `cs4406_sem_project
 ├── CLAUDE.md                 # project instructions for coding agents
 ├── pyproject.toml, uv.lock   # Python 3.11 project, managed by uv
 ├── env/                      # hardware.md, reference_platform.txt, sysinfo.json (written by make sysinfo)
-├── third_party/              # git submodules: simplepir/, verisimplepir/, apir-code/, dpf-go/ + PINS.md
+├── third_party/              # git submodules: simplepir/, verisimplepir/, apir-code/ + PINS.md
 ├── patches/                  # <submodule>/NN-<desc>.patch, build-only fixes; README.md has one row per patch (§10)
 ├── configs/
 │   ├── grid.yaml             # sizes, record sizes, arms, reps (Tier 1 / 2 / 3 presets)
 │   ├── network_profiles.yaml
 │   ├── prices.yaml           # filled in by humans, with source + date
 │   ├── load.yaml             # concurrency levels, arrival rates, worker counts (RQ6/RQ7)
-│   └── recovery_policies.yaml# which policies are enabled per arm, after [HUMAN] review (RQ4)
+│   └── recovery_policies.yaml# which policies are enabled per arm, as chosen in §6.1 (RQ4)
 ├── results/
 │   ├── raw/<run_id>/*.jsonl  # append-only, never edited
 │   └── processed/*.parquet
@@ -265,8 +263,7 @@ The repository root is the project. Python code lives in the `cs4406_sem_project
     │       └── plots.py      # all figures in §12
     ├── adapters/
     │   ├── simplepir_go/     # Go CLI wrapping github.com/ahenzinger/simplepir/pir            → arm S0-go
-    │   ├── apir_go/          # Go CLI wrapping github.com/si-co/vpir-code/lib/{client,server,database} → S3,S4,M0,M1
-    │   │   └── tools/dpfvectors/  # writes and re-checks the dpf-go equivalence vectors (P0, §11)
+    │   ├── apir_go/          # Go CLI wrapping github.com/si-co/vpir-code/lib/{client,server,database} → S3,S4,M0,M1; GPL-3.0 licence file (§7)
     │   └── vsp_cpp/          # C++ CLI linking libverisimplepir                                  → S0-cpp,S1,S2
     └── loadgen/              # Go closed/open-loop load generator (RQ6); Python is too slow to drive saturation
 ```
@@ -289,11 +286,12 @@ Each adapter is a standalone CLI. They must all behave identically so the harnes
 <adapter> --mode client --arm <arm> --connect <host:port>[,<host:port>] --session-queries <Q> --out <path.jsonl>
 ```
 
-**Serve mode (RQ3b, RQ6, RQ7).** A thin length-prefixed TCP (or gRPC) wrapper around the library's `Answer` call. The DB is loaded **once** and shared read-only by *W* worker threads. Before using threads, the agent must establish whether each library's answer function is thread-safe (read the source and quote it). If it is not, use *W* worker processes over a shared `mmap` of the DB, or serialise and document it. Inter-query parallelism (different queries on different workers) is the default for every arm. Intra-query parallelism is used only where the library provides it natively (apir-code `cores`); record which mode each arm used in `scheme_params.parallelism`. For two-server arms, run two server processes; the client waits for both. macOS cannot pin processes to cores, so the two servers cannot get disjoint core sets and share the machine's 8 cores; §13 lists this. apir-code already has gRPC servers in `cmd/grpc`, which may be reused.
+**Serve mode (RQ3b, RQ6, RQ7).** A thin length-prefixed TCP (or gRPC) wrapper around the library's `Answer` call. The DB is loaded **once** and shared read-only by *W* worker threads. Before using threads, the agent must establish whether each library's answer function is thread-safe (read the source and quote it). If it is not, use *W* worker processes over a shared `mmap` of the DB, or serialise and document it. Inter-query parallelism (different queries on different workers) is the default for every arm. Intra-query parallelism is used only where the library provides it natively (apir-code `cores`); record which mode each arm used in `scheme_params.parallelism`. For two-server arms, run two server processes; the client waits for both. macOS cannot pin processes to cores, so the two servers cannot get disjoint core sets and share the machine's 8 cores; §13 lists this. apir-code's gRPC servers in `cmd/grpc` do not build at the pin under Go 1.27 (§7), so serve mode uses the adapter's own wrapper.
 
 - **Data:** a deterministic pseudorandom DB generated from `--seed` (ChaCha/AES-CTR keyed by seed). Query indices are drawn uniformly from the same seeded PRNG. The ground-truth record is computed by the adapter for the `correct` check. DB generation time is excluded from every metric.
 - **Phase boundaries:** timers wrap *only* the scheme call (e.g. `Answer`), not serialisation, unless the field name says otherwise. Serialise every message to bytes and measure `len` — this is the measured communication.
-- **Two-server arms:** the Tier 1 run is in-process, with both servers as separate objects in one process, timed separately. Tier 2 optionally runs each server as a separate OS process over loopback gRPC, using apir-code's `lib/proto` and `cmd/grpc`, to validate the in-process numbers.
+- **Two-server arms:** the Tier 1 run is in-process, with both servers as separate objects in one process, timed separately. Tier 2 optionally runs each server as a separate OS process over loopback, using serve mode, to validate the in-process numbers. apir-code's `lib/proto` and `cmd/grpc` do not build at the pin under Go 1.27 (§7).
+- **One subprocess per cell.** The harness runs each cell in its own subprocess. VeriSimplePIR rejects a bad proof with an `assert`, which aborts the whole process, so a rejection in S1 or S2 ends only that cell's subprocess and never the harness (decision 16).
 - **Fault injection** happens **only in the adapter**, by mutating the serialised server message before the client sees it: flip one random bit, substitute another record's answer, or omit one server's answer. Never edit library code to inject faults.
 - **Output:** one JSON object per (repetition, phase), one per line:
 
@@ -317,22 +315,21 @@ Each adapter is a standalone CLI. They must all behave identically so the harnes
 
 ## 10. Rules for the coding agent (hard constraints)
 
-1. **No cryptography edits.** Do not change parameters, moduli, statistical-security constants (`STAT_SEC_PARAM`, `Elem`, `BASIS`), protocol logic or verification checks in `third_party/`. There is no separate development build. The patched build is the reported build, so every patch affects every reported number. Allowed patches are build fixes of these kinds only:
+1. **No cryptography edits.** Do not change parameters, moduli, statistical-security constants (`STAT_SEC_PARAM`, `Elem`, `BASIS`), protocol logic or verification checks in `third_party/`. There is no separate development build. The patched build is the reported build, so every patch affects every reported number. Allowed patches are build and portability fixes of these kinds only:
    - removing x86-only compiler flags (e.g. `-msse4.1 -maes -mavx2 -mavx`, `-maes -msse4`) on arm64;
    - Darwin paths, meaning Homebrew prefixes taken from `brew --prefix`;
    - removing `-lrt`, which macOS does not have;
    - include guards around x86-only headers;
-   - `replace` directives in `go.mod` that point a module at a pinned submodule in `third_party/`.
+   - portability fixes that provably do not change what the code computes. Each one is its own patch, and its row in `patches/README.md` gives the written argument. The humans accepted three for VeriSimplePIR (decision 3): `02-block-h-arm64-portability` (a missing `<type_traits>` include), `03-backend-h-float128-guard` (a guard around an unused `__float128` typedef) and `04-biguint-long-long-ctors` (two `BigUnsigned` constructors for macOS's `unsigned long long` `uint64_t`).
 
    Each patch is one file at `patches/<submodule>/NN-<desc>.patch` and has one row in `patches/README.md` saying what it changes and why. Anything else, including replacing `-march=native`, means stop and ask the humans.
 
-   1a. **The dpf-go arm64 exception.** This is the single crypto-adjacent patch allowed. dpf-go's four helpers `xor16`, `encryptAes128`, `aes128MMO` and `expandKeyAsm` exist only as amd64 assembly. The patch reimplements them for non-amd64 targets with Go's standard `crypto/aes`, and leaves the amd64 build unchanged. It must not change the DPF construction, its key format or its outputs. The arm64 build must be bit-identical to the amd64 build, checked under Rosetta 2 by `test_dpf_arm64_equivalence` (§11).
 2. **No fake preprocessing in reported numbers.** Upstream `Fake*` / random-hint helpers may be used only in an explicitly labelled `--fast-dev` mode, which writes `"fake_preproc": true`; analysis rejects those rows.
 3. **Correctness before speed.** Every arm must pass the correctness and fault-injection tests (§11) at 1 MiB before any timing run.
 4. **Do not invent numbers.** Prices, reproduction targets, hardware details and round counts come from humans or the code. If unknown, leave `null` and add a `TODO[HUMAN]`.
 5. **Stop at the gates** in §12 and report status instead of pushing on.
 6. **Serving and concurrency wrappers must not change answers.** Batching several clients' queries into one matrix–matrix product, or row-sharding a single answer, is allowed only if the library exposes it, or (Tier 3) if the wrapper's answers are bit-identical to the library's sequential answers in tests. Every such optimisation must apply equally to the verifiable arm and its baseline.
-7. **Recovery policies** are enabled per arm only after the humans fill in `configs/recovery_policies.yaml`. Some retry policies may weaken selective-failure security, and the agent must not decide this.
+7. **Recovery policies** are enabled per arm exactly as the humans chose in §6.1 (decision 12), and `configs/recovery_policies.yaml` records that choice. The agent must not enable `retry_same` or any other policy on its own, because retry policies may weaken selective-failure security.
 8. When an upstream function's semantics are unclear (e.g. whether `Reconstruct` verifies), read the source and **quote the relevant lines in the PR description**. Do not assume.
 
 ## 11. Tests and acceptance criteria
@@ -349,24 +346,23 @@ Each adapter is a standalone CLI. They must all behave identically so the harnes
 | `test_concurrent_correctness[arm]` | Serve mode, *C* = 16 clients, 1 000 queries: every answer correct and byte-identical to the sequential bench-mode answer for the same query seed |
 | `test_loadgen_not_bottleneck` | Load-generator CPU < 70 % at the highest *C* used; otherwise add load-generator cores or a second machine |
 | `test_netem_calibration` | Over the dummynet pipes on `lo0`, measured RTT within ±10 % and bandwidth within ±10 % of each profile (ping, iperf3) before any RQ3b run |
-| `test_dpf_arm64_equivalence` | DPF keys generated on either architecture evaluate to byte-identical outputs on amd64 (under Rosetta 2) and arm64 (native), and dpf-go's own tests pass on arm64. Runs in P0 |
 | `test_recovery[arm, fault, policy]` | `recovered` within the policy's attempt budget when the replica is honest; `aborted` (never `silent_wrong`) when all servers cheat; 0 false rejects across 1 000 honest queries |
 | RQ1 sanity | SimplePIR 1 GB anchor: hint ≈ 121 MB and online ≈ 242 KB (deterministic), else investigate before proceeding |
 
 ## 12. Phases, gates and figures
 
-Earlier versions of this spec cited course milestones in `projects/README.md` that list the **final deadline as 20 Nov**. `projects/README.md` does not exist in this repo, so the date cannot be checked here. If that deadline applies to this run, there are about 3.5 weeks left. Build **Tier 1 first**, then add Tier 2 phases in the order P7 (recovery) → P6 (volume/network) → P8 (multicore) → P9 (concurrency); P8–P9 share the serve-mode wrapper. With a 2–3-person team, P6–P7 and P8–P9 can run in parallel after G3. **[HUMAN]** Confirm the actual deadline.
+Scope is every phase, P1 to P10: all eight arms, Tier 1 and Tier 2, and the Tier 3 stretch phase P10 last. The schedule assumes a final deadline of 20 November 2026, taken from earlier course notes. Nobody has confirmed that date. **[HUMAN]** Confirm the actual deadline. `plan.md` holds the dated schedule and splits the tasks between IC and SG. It runs the reproduction anchors (P3) and the full grid (P4) first, so serve mode, concurrency and the stretch phase are what slip if time runs short.
 
 | Phase | Work | Gate (stop and report) | Tier |
 |---|---|---|---|
-| P0 Build (days 1–3) | Homebrew toolchain (§7). `make setup`: submodules at the pinned SHAs. `make build`: apply `patches/`, build all three codebases. `make test` on this Mac: `go test` in simplepir/pir (≈ 3 min per its README), apir-code `go test` (≈ 6 min per its README), dpf-go's own tests, `./bin/demo/test/pir_test` in VeriSimplePIR, and `test_dpf_arm64_equivalence` | **G0: all three build and pass upstream tests on this Mac, and the dpf-go tests and equivalence check pass.** If one fails after 1 day of build-fixing, escalate to humans with logs | 1 |
+| P0 Build (done 2026-10-29) | Homebrew toolchain (§7). `make setup`: submodules at the pinned SHAs. `make build`: apply `patches/`, build all three codebases (apir-code's library packages only, §7). `make test` on this Mac runs three upstream suites: `go test` in simplepir/pir (≈ 3 min per its README), apir-code `go test .` in the root package (≈ 6 min per its README; `TestReal*` is skipped because it needs the separately downloaded SKS key dump), and `./bin/demo/test/pir_test` in VeriSimplePIR. IC-1 in `plan.md` re-runs `make build test` after the apir-code repin | **G0: all three build and pass upstream tests on this Mac.** Passed (`notebooks/01_g0_upstream_tests.ipynb`, cell 1) | 1 |
 | P1 Adapters (days 3–8) | Three adapters; correctness + fault tests; schema | **G1: §11 correctness and fault tests green for all 8 arms** | 1 |
 | P2 Harness (days 6–9) | `run_grid.py`, resumable, timeouts, RSS capture, `make smoke` | **G2: smoke run + figures from smoke data** | 1 |
 | P3 RQ1 anchors (days 9–11) | Paper-native configurations; `reproduce.py` table | **G3: reproduction table reviewed by humans** | 1 |
 | P4 Full grid (days 10–16) | All cells, DB ≤ 1 GiB | Grid complete or failures recorded with status (including `oom`) | 1 |
 | P5 Analysis (days 14–18) | Overhead ratios + CIs; amortisation; network profiles; break-even Q | All figures regenerate from `make figures` | 1–2 |
 | P6 Query volume + network (≈ 2 days) | RQ3a session-validation runs; RQ3b dummynet runs at focus cells | **G4: `test_netem_calibration` (dummynet) green** | 2 |
-| P7 Failure & recovery (≈ 3 days) | Fault × policy trials; cheating-rate sweep; measured vs computed expected cost | **G5: humans have approved `recovery_policies.yaml`** before any run | 2 |
+| P7 Failure & recovery (≈ 3 days) | Fault × policy trials; cheating-rate sweep; measured vs computed expected cost | **G5: humans have approved the recovery policies** before any run. Met by decision 12 (§6.1) | 2 |
 | P8 Serve mode + multicore (≈ 3 days) | Serve-mode wrappers; thread-safety findings; RQ7 core sweep | **G6: concurrent-correctness test green** | 2 |
 | P9 Concurrency (≈ 3 days) | Load generator; closed- and open-loop RQ6 runs | **G7: load generator verified not to be the bottleneck** | 2–3 |
 | P10 Stretch | RQ5 rebuild cost; second-hardware RQ7 runs; intra-query sharding wrapper | — | 3 |
@@ -393,19 +389,21 @@ Tables: T1 machine + toolchain + SHAs; T2 scheme parameters and security level p
 - **Implementation, not scheme:** ratios across codebases (Go versus C++) mix scheme cost with engineering quality. Mitigated by within-codebase pairs (S1/S0-cpp, M1/M0) and the S0-go/S0-cpp ablation.
 - **Different security levels and parameters** across libraries: report `scheme_params`; do not claim equal security unless the papers state it.
 - **Fake versus real preprocessing:** enforced by rule 2.
+- **S2 lacks the digest check:** the VeriSimplePIR paper's one-time digest check `DigVer` is not in the upstream code, and rule 1 forbids writing it (decision 5). S2 therefore omits that cost, and the S2/S0-cpp overhead understates the paper's full scheme by the cost of `DigVer`.
+- **VeriSimplePIR ratios against a different baseline and at different sizes:** the paper's headline ratios are against 32-bit SimplePIR, and we compare against its 64-bit SimplePIR bars because S0-cpp is 64-bit (decision 6). The paper measures from 4 GiB up and our largest database is 1 GiB, so we compare against the paper's sizes only analytically, with `params.cpp`, and compare compute only at our sizes (decision 7).
+- **LWE+ `tECC` values partly derived:** the paper does not publish the values at 16 MiB and 128 MiB. They come from running the authors' `scripts/integrity_amplification.py` at the 2^-64 target, not from the paper (decision 9).
 - **Single-threaded, single machine:** results do not show multi-core scaling. Two-server timing is in-process, and network effects are modelled, not measured.
 - **Trust assumptions differ:** two-server schemes assume non-colluding servers, single-server schemes do not. A cost comparison is not a security equivalence, and the report must say so whenever F4/F5 put families side by side.
 - **Apple silicon versus the papers' x86-64 hardware:** the papers measured on x86-64 machines (§3: AWS c5n.metal for SimplePIR, Intel Xeon E5-2680 v3 for Colombo et al.). Absolute times on an M1 Pro are not comparable to theirs. Compare our ratios with the published ratios, never our absolute times with theirs.
 - **Performance and efficiency cores, no pinning:** the M1 Pro has 6 performance and 2 efficiency cores, and macOS gives user processes no way to pin a thread to a core. A single-threaded run may move between core types, and the two servers of a two-server arm in serve mode cannot get disjoint cores. This adds variance that repetitions and medians reduce but do not remove. RQ7 stops at *W* = 6 for this reason.
 - **Unified memory bandwidth:** the CPU cores share one memory system with the rest of the chip, and §6 records no bandwidth counters. Multicore and concurrency results for matrix–vector schemes depend on this machine's memory system. The report must treat bandwidth saturation as an inference from the throughput curves, not a measurement.
 - **Portable cryptoTools backends in VeriSimplePIR:** on arm64 `__SSE2__` is undefined, so cryptoTools builds with `OC_ENABLE_SSE2` off and uses its portable `block` type instead of the SSE2 path the authors' x86-64 builds used. AES is the portable implementation on both platforms, because nothing in the pinned code or its Makefiles defines `OC_ENABLE_AESNI`. S0-cpp, S1 and S2 all use the same backend, so their ratios stay comparable, but absolute VeriSimplePIR times and the S0-go/S0-cpp ablation may shift.
-- **The dpf-go port:** every apir-code arm builds against the rule 1a helpers, and M0 calls dpf-go on every query (`dpf.Gen` in `Query`). `test_dpf_arm64_equivalence` rules out a change in outputs. It does not rule out a change in speed relative to the amd64 assembly.
 - **Go 1.27 instead of 1.19, and clang instead of GCC:** the upstream code was tested with Go 1.17–1.19, and cgo builds C with GCC by default on Linux. Our compiler and runtime may generate different code from what the authors measured. Both arms of each pair use the same toolchain.
 - **Thermal throttling:** long runs on a laptop can lower clock speeds partway through a cell. The report checks each cell for drift across repetitions.
 - **Load generator and server on one machine (RQ6):** the load generator competes with the server for cores and memory bandwidth. `test_loadgen_not_bottleneck` checks the load generator's CPU use but does not remove the contention, so measured server throughput may be lower than on a dedicated server.
 - **Emulated networks and loopback:** dummynet on `lo0` reproduces bandwidth and delay but not real-world jitter, loss patterns or TCP behaviour on long paths. Results are for the stated profiles only.
 - **Serving wrappers are ours:** throughput depends on our thin server code (threading, serialisation, socket handling), not only on the schemes. Identical wrappers for every arm keep comparisons fair but do not reflect a production deployment.
-- **Recovery policies are modelling choices:** the honest-replica assumption and the retry budget drive RQ4 results. Retry-based recovery may interact with selective-failure security; the report discusses each enabled policy against the scheme's security definition.
+- **Recovery policies are modelling choices:** the honest-replica assumption and the retry budget drive RQ4 results. `retry_same` is disabled because retrying the same server may weaken selective-failure security (§6.1). The report discusses each enabled policy against the scheme's security definition.
 - **Stale code:** upstream repos are 2023–2024 research prototypes, with warnings to that effect in their READMEs.
 
 ## 14. Definition of done
@@ -419,10 +417,10 @@ Tables: T1 machine + toolchain + SHAs; T2 scheme parameters and security level p
 
 ## Appendix A — Prompt to paste in front of this spec
 
-> You are implementing the benchmark harness described in the attached spec (`vpir_bench_spec.md`). Work phase by phase (P0 → P5, then the Tier 2 phases P6–P9 in the order given in §12) and **stop at every gate G0–G7** to report what passed, what failed, and the exact logs. Obey §10 strictly: no edits to cryptographic code or parameters, no fake preprocessing in reported numbers, no invented values. Anything marked [HUMAN] is a question for me, not a decision for you. Before writing an adapter, read the upstream source for that scheme and summarise the exact call sequence and where verification happens, quoting file paths and line ranges. Start with P0: check that the Homebrew toolchain in §7 is installed, run `make setup` to pin the submodules, then run `make build` and `make test` to build all three upstream repos natively on this Mac and run their test suites.
+> You are implementing the benchmark harness described in the attached spec (`vpir_bench_spec.md`). Work phase by phase (P0 → P5, then the Tier 2 phases P6–P9 in the order given in §12) and **stop at every gate G0–G7** to report what passed, what failed, and the exact logs. Obey §10 strictly: no edits to cryptographic code or parameters, no fake preprocessing in reported numbers, no invented values. Anything marked [HUMAN] is a question for me, not a decision for you. Before writing an adapter, read the upstream source for that scheme and summarise the exact call sequence and where verification happens, quoting file paths and line ranges. P0 is done (gate G0 passed). Start with P1: re-run `make setup`, `make build` and `make test` to confirm the three upstream suites still pass on this Mac, then write the adapters in §9.
 
 ## Appendix B — Upstream entry points found in source (for the agent's orientation; verify against pinned SHAs)
 
 - **SimplePIR** (`pir/`): `pir.go` (interface; `RunPIR`, `RunPIRCompressed`, `RunFakePIR`), `simple_pir.go`, `double_pir.go`, `database.go`, `params.csv` (LWE params). Benchmarks via env vars `LOG_N`, `D` (`go test -bench PirSingle`), and analytical communication via `go test -run=BW`. cgo flag `-O3 -march=native`.
 - **VeriSimplePIR** (`src/lib/pir/preproc_pir.h`): class `VeriSimplePIR(N, d, allowTrivial, verbose, simplePIR, randomData, preproc, honestHint)`; online `Init`, `GenerateHint`, `Query`, `Answer`, `PreVerify`, `Recover`; offline `PreprocInit`, `PreprocGenerateHint`, `PreprocSampleC`, `PreprocClientMessage`, `PreprocAnswer`, `PreprocProve`, `PreprocVerify`, `PreprocRecoverZ`, `VerifyPreprocZ`; `Fake*` variants exist (dev only). Benches in `src/demo/bench/` (`simplepir_bench`, `preproc_pir_bench`, `pir_bench`, `batch_pir_bench`, `verify_bench`, `proof_bench`). Analytical comms in `src/demo/scripts/params.cpp`. Needs `clang++`, OpenSSL (`openssl@3` from Homebrew), and `DYLD_LIBRARY_PATH=…/bin/lib` on macOS (`LD_LIBRARY_PATH` on Linux). The `Makefile`'s Darwin branch hard-codes `/usr/local/opt/llvm`, adds `-maes -msse4` and links `-lrt`. The bundled cryptoTools `block.h` includes `<emmintrin.h>` and `<smmintrin.h>` with no guard; it otherwise falls back to a `std::uint64_t mData[2]` block when `__SSE2__` is undefined.
-- **apir-code** (module `github.com/si-co/vpir-code`): `lib/client` (`NewPIR`, `NewLWE`, `QueryBytes`, `ReconstructBytes`), `lib/server` (`NewPIRTwo`, `NewPIR`, `AnswerBytes`), `lib/database` (`CreateRandomBytes`, `CreateRandomMerkle`, `CreateRandomBinaryLWEWithLength`, `CreateRandomEllipticWithDigest`), `lib/merkle`, `lib/fss`, `lib/monitor` (CPU timers). Simulation driver `simulations/simul.go` with TOML configs (`DBBitLengths` in **bits**, `Repetitions = 30`, `BitsToRetrieve = 8192`). Multi-server configs in `simulations/multi/` (`pir-classic`, `pir-merkle`, `NumServers = [2,4,6,8,10]`, `BlockLength = 1024`). Authors' raw results are in `simulations/final_results/*.json`, a useful extra RQ1 cross-check. cgo flags `-march=native -msse4.1 -maes -mavx2 -mavx`. Depends on dpf-go (`github.com/dkales/dpf-go`, pseudo-version `6eae87348848`), which `lib/client/pir_point.go` imports for `dpf.Gen`. In dpf-go, `dpf/aes.go` has no build tags and declares `xor16`, `encryptAes128`, `aes128MMO` and `expandKeyAsm` without bodies; the only implementation is `aes_amd64.s` (§10 rule 1a). `lib/fss` uses Go's `crypto/aes` and builds on arm64.
+- **apir-code** (module `github.com/si-co/vpir-code`): `lib/client` (`NewPIR`, `NewLWE`, `QueryBytes`, `ReconstructBytes`), `lib/server` (`NewPIRTwo`, `NewPIR`, `AnswerBytes`), `lib/database` (`CreateRandomBytes`, `CreateRandomMerkle`, `CreateRandomBinaryLWEWithLength`, `CreateRandomEllipticWithDigest`), `lib/merkle`, `lib/fss`, `lib/monitor` (CPU timers). Simulation driver `simulations/simul.go` with TOML configs (`DBBitLengths` in **bits**, `Repetitions = 30`, `BitsToRetrieve = 8192`). Multi-server configs in `simulations/multi/` (`pir-classic`, `pir-merkle`, `NumServers = [2,4,6,8,10]`, `BlockLength = 1024`). Authors' raw results are in `simulations/final_results/*.json`, a useful extra RQ1 cross-check. cgo flags `-march=native -msse4.1 -maes -mavx2 -mavx`. Pinned at `35cabd6` (2024-10-15), where `lib/client/pir_point.go` sends XOR secret shares and nothing imports dpf-go. Single-server LWE+ is `client.NewAmplify` / `server.NewAmplify` (`amplify_test.go`; `simulations/simul.go`, primitive `cmp-vpir-lwe`), and `scripts/integrity_amplification.py` computes `tECC` for an integrity target. Under Go 1.27 only `lib/client`, `lib/server` and `lib/database` build; `cmd/grpc`, `lib/proto` and `simulations` fail on upstream's old `go.sum` (§7). `lib/fss` uses Go's `crypto/aes` and builds on arm64.
