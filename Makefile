@@ -15,7 +15,7 @@ PINS := \
 	verisimplepir,https://github.com/leodec/verisimplepir,3643bb7cbaae02da98a195c4d004d4d083e3ab88 \
 	apir-code,https://github.com/dedis/apir-code,35cabd62fb898926f5bea6035caeae39091e091d
 
-.PHONY: setup patch build test sysinfo
+.PHONY: setup patch build adapters test sysinfo
 
 setup:
 	for pin in $(PINS); do \
@@ -58,6 +58,15 @@ build: patch
 	cd third_party/simplepir/pir && go build ./...
 	@# Library packages only: upstream's old go.sum lacks grpc and survey, which cmd/grpc, lib/proto and simulations need.
 	cd third_party/apir-code && go build ./lib/client ./lib/server ./lib/database
+	$(MAKE) adapters
+
+ADAPTERS := build/adapters
+
+adapters:
+	mkdir -p $(ADAPTERS)
+	cd src/adapters/simplepir_go && GOPROXY=off go build \
+		-ldflags "-X main.upstreamSHA=$$(git -C $(CURDIR)/third_party/simplepir rev-parse HEAD)" \
+		-o $(CURDIR)/$(ADAPTERS)/simplepir-adapter .
 
 test:
 	uv run python -m cs4406_sem_project.harness.upstream_tests $(if $(ONLY),--only $(ONLY))
