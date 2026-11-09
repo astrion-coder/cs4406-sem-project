@@ -1,14 +1,14 @@
 ---
 name: verify-vpir-bench
-description: Drive and prove the verifiable-PIR benchmark's command-line pipeline on this Mac (make patch, make build, make test, make sysinfo, and the dpf-go arm64 equivalence check), recording exit codes, logs and before/after repo state as evidence. Use before claiming that a change to the Makefile, patches/, the upstream test runner, sysinfo, or the dpf-go port works, and to re-check that every upstream suite still passes (gate G0).
+description: Drive and prove the verifiable-PIR benchmark's command-line pipeline on this Mac (make patch, make build, make test, make sysinfo), recording exit codes, logs and before/after repo state as evidence. Use before claiming that a change to the Makefile, patches/, the upstream test runner, or sysinfo works, and to re-check that every upstream suite still passes (gate G0).
 ---
 
 # Verify the vpir benchmark
 
-The project is a command-line build-and-measure pipeline, not a server. People drive it through `make` targets at the repo root and two standalone tools. It runs natively on an Apple M1 Pro (darwin/arm64). Nothing listens on a port.
+The project is a command-line build-and-measure pipeline, not a server. People drive it through `make` targets at the repo root and standalone tools. It runs natively on an Apple M1 Pro (darwin/arm64). Nothing listens on a port.
 
 - **Primary entry.** `make setup | patch | build | test | sysinfo` from the repo root.
-- **Secondary entries.** `bash src/adapters/apir_go/tools/dpfvectors/check.sh`, `uv run python -m cs4406_sem_project.harness.upstream_tests`, `uv run python docs/tools/md2pdf.py`, and the notebooks in `notebooks/`.
+- **Secondary entries.** `uv run python -m cs4406_sem_project.harness.upstream_tests`, `uv run python docs/tools/md2pdf.py`, and the notebooks in `notebooks/`.
 - **Not built yet.** The measurement adapters for the eight benchmark configurations (spec phase P1). Add a feature file per adapter when they land.
 
 The recipes live in `features/`. Read `features/README.md` before driving anything.
@@ -21,9 +21,8 @@ From a fresh clone, run these once. They need the network, and the installs are 
 
 ```sh
 brew install go llvm openssl@3 iperf3
-softwareupdate --install-rosetta --agree-to-license
 uv sync
-make setup     # clones the four pinned submodules into third_party/, go mod download, uv sync
+make setup     # clones the three pinned submodules into third_party/, go mod download, uv sync
 make build     # make patch, then builds VeriSimplePIR, simplepir and apir-code
 ```
 
@@ -39,11 +38,11 @@ bash .claude/skills/verify-vpir-bench/scripts/doctor.sh
 
 Read-only. It prints one `ok` or `FAIL` line per check and exits non-zero on any failure. It checks:
 
-- macOS on arm64, `go`, Homebrew LLVM clang, Homebrew `openssl@3`, `.venv` on Python 3.11, and Rosetta 2.
+- macOS on arm64, `go`, Homebrew LLVM clang, Homebrew `openssl@3`, `.venv` on Python 3.11.
 - Each submodule's `HEAD` equals its pin in the Makefile's `PINS` list.
 - Every `patches/<submodule>/*.patch` is applied.
 - VeriSimplePIR's `pir_test` exists and `libverisimplepir.dylib` is arm64.
-- No other `upstream_tests` run or dpf check is running.
+- No other `upstream_tests` run is running.
 
 Run it first, and again whenever a step surprises you. Do not drive while it reports another run. Two runs share the submodule working trees and build outputs, and `make test` names its log directory to the second, so concurrent runs corrupt each other. There is no way to isolate them on one checkout.
 
@@ -70,7 +69,7 @@ Proof standards:
 - **Drive the user path.** Use the `make` targets and the documented tool commands. Do not call `run()` in `upstream_tests.py` or rebuild things by hand inside `third_party/`. The exceptions are recipe steps that set up a failure on purpose and say how to restore it.
 - **Capture the action and the result.** The step log is the action. The artifact the feature produces is the result.
 - **Check side effects.** The before and after `git status` in each step log shows what a command changed. A step that changes files nobody expected fails, even with the right exit code.
-- **No mocks.** The upstream suites, the Rosetta 2 x86 build and the toolchain are all real.
+- **No mocks.** The upstream suites, the toolchain and the builds are all real.
 - **Go tests must really run.** The runner passes `-count=1`. A suite log line ending in `(cached)` is not proof.
 - **Logs are not results.** Wall times in logs are not benchmark numbers. CLAUDE.md requires every number in README.md to come from a notebook cell.
 

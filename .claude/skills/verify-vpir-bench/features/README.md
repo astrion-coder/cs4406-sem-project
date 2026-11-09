@@ -39,7 +39,6 @@ Each feature file starts with an H1 title and one paragraph describing the behav
 - [Run the upstream test suites](./upstream-tests.md) covers `make test`, suite selection, unknown suites, failure reporting and fresh Go runs.
 - [Apply build patches](./patch.md) covers applying, skipping and drift detection in `make patch`.
 - [Build the upstream code](./build.md) covers `make build` from a clean VeriSimplePIR tree and the arm64 outputs.
-- [Check the dpf-go arm64 port](./dpf-equivalence.md) covers the cross-architecture check and its negative control.
 - [Record the machine and toolchain](./sysinfo.md) covers `make sysinfo` and the environment notebook.
 
 ## Not mapped yet

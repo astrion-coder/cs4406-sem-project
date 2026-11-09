@@ -17,3 +17,6 @@ data/
 .ipynb_checkpoints/
 logs/
 .audit/
+
+# Research papers kept out of git
+docs/papers/

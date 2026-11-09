@@ -1,10 +1,10 @@
 # Run the upstream test suites
 
-`make test` runs each upstream codebase's own test suite, plus the dpf-go equivalence check. It prints one line per suite, writes a log per suite and a `SUMMARY.md` under `logs/p0/<UTC timestamp>/`, and exits 0 only if every selected suite passed. All five passing is gate G0 in the spec.
+`make test` runs each upstream codebase's own test suite. It prints one line per suite, writes a log per suite and a `SUMMARY.md` under `logs/p0/<UTC timestamp>/`, and exits 0 only if every selected suite passed. All three passing is gate G0 in the spec.
 
 ## Sub-features
 
-- `tests-all` runs the five suites in order: simplepir, apir-code, dpf-go, verisimplepir, dpf-equivalence.
+- `tests-all` runs the three suites in order: simplepir, apir-code, verisimplepir.
 - `tests-subset` runs only the suites named in `ONLY`.
 - `tests-fresh` reruns Go tests instead of reusing Go's test cache.
 - `tests-unknown` rejects an unknown suite name before running anything.
@@ -24,12 +24,12 @@ Preconditions:
 - The baseline in `README.md` holds, and `doctor.sh` exits 0.
 - `make build` has run since the last change to `patches/` or `third_party/`.
 
-- **Subset.** Run `bash $S/step.sh tests-subset make test ONLY="dpf-go dpf-equivalence"`. Exit 0. The output has exactly two suite lines, `dpf-go: passed` and `dpf-equivalence: passed`, and both name the same new `logs/p0/<ts>/` directory.
-- **Fresh Go run.** Run `bash $S/step.sh tests-fresh bash -c '! grep -q "(cached)" "$(ls -td logs/p0/*/ | head -1)dpf-go.log"'`. Exit 0, meaning the dpf-go log has no `(cached)` result.
-- **Unknown suite.** Run `bash $S/step.sh --expect 2 tests-unknown make test ONLY=nope`. Make exits 2. The output contains `error: unknown suite(s) ['nope']` followed by the five known names. Compare `ls logs/p0` before and after: no new directory.
+- **Subset.** Run `bash $S/step.sh tests-subset make test ONLY="verisimplepir apir-code"`. Exit 0. The output has exactly two suite lines, `apir-code: passed` and `verisimplepir: passed`, and both name the same new `logs/p0/<ts>/` directory.
+- **Fresh Go run.** Run `bash $S/step.sh tests-fresh bash -c '! grep -q "(cached)" "$(ls -td logs/p0/*/ | head -1)apir-code.log"'`. Exit 0, meaning the apir-code log has no `(cached)` result.
+- **Unknown suite.** Run `bash $S/step.sh --expect 2 tests-unknown make test ONLY=nope`. Make exits 2. The output contains `error: unknown suite(s) ['nope']` followed by the three known names. Compare `ls logs/p0` before and after: no new directory.
 - **Failure.** Run `bash $S/step.sh --expect 2 tests-failure make test ONLY=simplepir CC=/nonexistent/clang`. Make exits 2. The output has a `simplepir: failed (exit 1, ...)` line, and that suite's log names the missing C compiler.
-- **All suites.** Run `bash $S/step.sh tests-all make test`. Exit 0. The output has five suite lines, each `passed (exit 0, ...)`, in the order listed above. On the M1 Pro it took 190 s on 2026-11-09, mostly simplepir and apir-code.
-- **Proof.** Run `cp "$(ls -td logs/p0/*/ | head -1)SUMMARY.md" "$VERIFY_RUN/tests-all.SUMMARY.md"`. The copy has five rows, each with status `passed` and exit code `0`.
+- **All suites.** Run `bash $S/step.sh tests-all make test`. Exit 0. The output has three suite lines, each `passed (exit 0, ...)`, in the order listed above. On the M1 Pro the suites took 109 s, 71 s and 4 s (about 3 minutes in total) on 2026-11-09, mostly simplepir and apir-code.
+- **Proof.** Run `cp "$(ls -td logs/p0/*/ | head -1)SUMMARY.md" "$VERIFY_RUN/tests-all.SUMMARY.md"`. The copy has three rows, each with status `passed` and exit code `0`.
 
 ## Gotchas
 

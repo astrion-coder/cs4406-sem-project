@@ -7,6 +7,3 @@
 [submodule "third_party/apir-code"]
 	path = third_party/apir-code
 	url = https://github.com/dedis/apir-code
-[submodule "third_party/dpf-go"]
-	path = third_party/dpf-go
-	url = https://github.com/dkales/dpf-go

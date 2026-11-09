@@ -4,8 +4,7 @@
 |---|---|---|---|
 | simplepir | https://github.com/ahenzinger/simplepir | e9020b03bf2872c75b8954e749e32408b5db87ed | 2026-10-30 |
 | verisimplepir | https://github.com/leodec/verisimplepir | 3643bb7cbaae02da98a195c4d004d4d083e3ab88 | 2026-10-30 |
-| apir-code | https://github.com/dedis/apir-code | 7a7f2041bc1e0907ef089f8e8e55252ef7f18e0f | 2026-10-30 |
-| dpf-go | https://github.com/dkales/dpf-go | 6eae873488482fc6f01307d55f74b33862de6840 (the commit in apir-code's `go.mod` pseudo-version `v0.0.0-20210304170054-6eae87348848`) | 2026-10-30 |
+| apir-code | https://github.com/dedis/apir-code | 35cabd62fb898926f5bea6035caeae39091e091d (2024-10-15 commit, before DPF queries were added, so the two-server client sends plain XOR vectors as in the paper) | 2026-11-09 |
 
 ## Updating a pin
 

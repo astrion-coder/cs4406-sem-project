@@ -48,14 +48,12 @@ SUITES: tuple[Suite, ...] = (
     # TestReal* (key_test.go) read the SKS PGP key dump the apir-code README downloads separately
     # into data/sks/. They test the Keyd demo application, not the benchmark arms.
     Suite("apir-code", "third_party/apir-code", ("go", "test", "-count=1", "-timeout", "60m", "-skip", "^TestReal", ".")),
-    Suite("dpf-go", "third_party/dpf-go", ("go", "test", "-count=1", "-timeout", "60m", "./dpf")),
     Suite(
         "verisimplepir",
         "third_party/verisimplepir",
         ("./bin/demo/test/pir_test",),
         {"DYLD_LIBRARY_PATH": str(REPO_ROOT / "third_party/verisimplepir/bin/lib")},
     ),
-    Suite("dpf-equivalence", ".", ("bash", "src/adapters/apir_go/tools/dpfvectors/check.sh")),
 )
 
 

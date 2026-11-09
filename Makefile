@@ -8,13 +8,12 @@ export CGO_ENABLED := 1
 
 .SHELLFLAGS := -eu -c
 
-# name,url,pinned commit (dpf-go is the commit in apir-code's go.mod pseudo-version).
+# name,url,pinned commit.
 # The separator must not be a shell metacharacter: these words are expanded unquoted in a for loop.
 PINS := \
 	simplepir,https://github.com/ahenzinger/simplepir,e9020b03bf2872c75b8954e749e32408b5db87ed \
 	verisimplepir,https://github.com/leodec/verisimplepir,3643bb7cbaae02da98a195c4d004d4d083e3ab88 \
-	apir-code,https://github.com/dedis/apir-code,7a7f2041bc1e0907ef089f8e8e55252ef7f18e0f \
-	dpf-go,https://github.com/dkales/dpf-go,6eae873488482fc6f01307d55f74b33862de6840
+	apir-code,https://github.com/dedis/apir-code,35cabd62fb898926f5bea6035caeae39091e091d
 
 .PHONY: setup patch build test sysinfo
 
@@ -57,7 +56,8 @@ patch:
 build: patch
 	$(MAKE) -C third_party/verisimplepir LLVM_PREFIX=$(LLVM_PREFIX) OPENSSL_PREFIX=$(OPENSSL_PREFIX)
 	cd third_party/simplepir/pir && go build ./...
-	cd third_party/apir-code && go build ./...
+	@# Library packages only: upstream's old go.sum lacks grpc and survey, which cmd/grpc, lib/proto and simulations need.
+	cd third_party/apir-code && go build ./lib/client ./lib/server ./lib/database
 
 test:
 	uv run python -m cs4406_sem_project.harness.upstream_tests $(if $(ONLY),--only $(ONLY))

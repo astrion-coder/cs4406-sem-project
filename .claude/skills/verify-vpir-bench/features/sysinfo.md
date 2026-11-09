@@ -23,7 +23,7 @@ Preconditions:
 
 - **Write.** Run `bash $S/step.sh sysinfo make sysinfo`. Exit 0. The step log's state after shows `env/` as new (`?? env/`) or its files as modified.
 - **Platform tag.** Run `bash $S/step.sh sysinfo-platform cat env/reference_platform.txt`. It prints `arm64-darwin-Apple M1 Pro`.
-- **Upstream.** Run `bash $S/step.sh sysinfo-upstream uv run python -c "import json; u = json.load(open('env/sysinfo.json'))['upstream']; [print(k, v['sha'], v['dirty']) for k, v in sorted(u.items())]"`. It prints apir-code, dpf-go, simplepir and verisimplepir, each with its pin from the Makefile. `dirty` is `True` for the three submodules that have patches.
+- **Upstream.** Run `bash $S/step.sh sysinfo-upstream uv run python -c "import json; u = json.load(open('env/sysinfo.json'))['upstream']; [print(k, v['sha'], v['dirty']) for k, v in sorted(u.items())]"`. It prints apir-code, simplepir and verisimplepir, each with its pin from the Makefile. `dirty` is `True` for the two submodules that have patches.
 - **Notebook.** Run `bash $S/step.sh sysinfo-notebook uv run jupyter nbconvert --to notebook --execute notebooks/00_environment.ipynb --output-dir "$VERIFY_RUN"`. Exit 0. The output of cell 1 in `$VERIFY_RUN/00_environment.ipynb` starts with `arm64-darwin-Apple M1 Pro`.
 - **Proof.** Run `cp env/sysinfo.json env/reference_platform.txt "$VERIFY_RUN/"`.
 
