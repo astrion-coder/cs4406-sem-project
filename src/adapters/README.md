@@ -68,7 +68,7 @@ One object per repetition and phase, warm-ups included. The harness supplies thr
 | `recovery` | string | `--recovery` |
 | `status` | string | `ok` or `unsupported_params`. The harness writes `oom`, `timeout` and `crash`. |
 | `metrics` | object | see below |
-| `analytical` | object or null | upstream's own size formulas, with keys `up_bytes`, `down_bytes` and `offline_down_bytes_hint_only`, each null where upstream has no formula |
+| `analytical` | object or null | upstream's own size formulas. It always has the keys `up_bytes`, `down_bytes` and `offline_down_bytes_hint_only`, each null where upstream has no formula. It may carry more keys when upstream gives more formulas. |
 | `correct` | boolean or null | the recovered record equals the ground truth (online only) |
 | `detected` | boolean or null | verifiable arms: true when the client rejected, false when it accepted. Baselines: always null. |
 | `error` | string or null | the library's message for `unsupported_params`, otherwise null |
@@ -116,6 +116,15 @@ A uniformly random bit usually cannot change the answer. It may fall outside the
 - For DDH, it is any bit of the answer.
 
 Each adapter's README states its rule. An honest client's output must change when the bit flips, and the adapter checks this on its own first faulted repetition.
+
+For `flip_hint_bit`:
+
+- A baseline arm's offline record can only show `faulted=true`, because a baseline has no check that could fail.
+- For a verifiable arm, the client checks every hint it accepts. So in S1 and S2 an online record with a corrupted hint first runs the hint check (`VerifyPreprocZ`) and reports its verdict as `detected`.
+
+## Encoding bytes
+
+Bytes measure what a client and server would exchange over a network. When upstream has a serialiser, use it. When it has none, as VeriSimplePIR does, encode each element in the fewest whole bytes its bit width needs, packed tightly, which is what upstream's size formulas count. In-memory representations, such as two 64-bit limbs per multi-limb element, count toward `client_storage_bytes`, not toward communication.
 | `stale_record`, `bad_proof`, `drop_server` | | | P7. Usage error (exit 2) until then. |
 
 For a baseline arm (S0-go, S0-cpp, M0), a fault shows up as `correct=false` with `detected=null`. That is the threat verification removes. For a verifiable arm, `detected=true` means the client rejected the answer.

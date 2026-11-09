@@ -24,7 +24,7 @@ The real sequence of `RunPIR` (`pir/pir.go:99-171`), split so each call is timed
 | Offline | `Setup` | `server_preproc_s` |
 | Online | `Query` | `query_gen_s` |
 | Online | `Answer` | `server_answer_s` |
-| Online | `Recover`, once per piece of the record | `client_recover_s` (the sum) |
+| Online | `recoverRecord`, one decode of the record (see Decoding) | `client_recover_s` |
 
 `Init` runs with the garbage collector on, because the library draws every element of `A` through `math/big` and leaves garbage behind. A collection may therefore fall inside `public_params_s`. `Setup` runs with the collector off.
 
@@ -39,12 +39,25 @@ The compressed path (`RunPIRCompressed`, `InitCompressed`, `DecompressState`) is
 - `--db-bytes` and `--record-bytes` become entries in one function, `plan`.
 - A record of `R` bytes is `ceil(R/8)` pieces. Each piece is one 64-bit entry, the widest `Recover` can return (`uint64`). A record under 8 bytes is one entry of `8R` bits.
 - `n_records = db_bytes / record_bytes` (floor). The database is padded with zero entries to fill whole record rows.
-- Piece `k` of record `r` is entry `(r/m * pieces + k) * m + r%m`, with `m` the number of columns. So all pieces of a record share column `r % m`. One `Query` selects that column and the single `Answer` covers all of it (decision 11). `Recover` is called once per piece, with that piece's entry index.
+- Piece `k` of record `r` is entry `(r/m * pieces + k) * m + r%m`, with `m` the number of columns. So all pieces of a record share column `r % m`. One `Query` selects that column and the single `Answer` covers all of it (decision 11). Decoding reads each piece from the rows of its entry index (see Decoding).
 - The plaintext modulus `p` comes from the library (`PickParams`, then `PickParamsGivenDimensions`). With `n = 1024` and `logq = 32` as in `pir_test.go`, `p` is read from `params.csv` by column count (991 up to `2^13` columns, 701 up to `2^15`). At `p = 991` each 64-bit entry takes `ne = 7` elements of Z_p, so the matrix is larger than the data by the ratio `7 * log2(991) / 64` (about 1.09).
 - The shape is chosen so every record sits in one column and `ell + m` is smallest, which is the near-square shape `ApproxSquareDatabaseDims` aims for. `scheme_params.record_rows` is the number of stacked records per column.
-- `Recover` recomputes `H * secret` on every call, so `client_recover_s` grows linearly with the number of pieces. This is a cost of fitting long records into the library's one-entry `Recover`, not of SimplePIR itself. Analysis comparing S0-go with S0-cpp at 1 KiB records should say so.
+- Upstream `Recover` recomputes `H * secret` on every call, so calling it once per piece would make `client_recover_s` grow linearly with the number of pieces. The adapter does not do that. See Decoding.
 
 `scheme_params`: `n`, `logq`, `p`, `sigma`, `ell` (`Params.L`, matrix rows), `m` (`Params.M`, columns), `entry_bits`, `ne`, `packing`, `pieces_per_record`, `record_rows`, `entries`, `basis`, `squishing`, `compressed_a` (false), `parallelism` (`single-thread`).
+
+## Decoding
+
+A client holding one answer for a column decodes the queried record once. The work that does not depend on the piece is done once per record, then each piece is read out. The VeriSimplePIR adapter (S0-cpp) follows the same rule, so S0-go and S0-cpp differ in implementation and not in decode strategy.
+
+`recoverRecord` in `session.go` is the body of `SimplePIR.Recover` (`simple_pir.go:185-214`) with the piece-independent part hoisted out of the per-piece loop, using only exported library functions:
+
+1. Once per record: the query offset `(p/2) * sum(query)` modulo `q` (`Matrix.Get`), and `interm = MatrixMul(H, secret)` over the whole column.
+2. Per piece `k`: for each of the `ne` answer rows of entry `Entry(r, k)`, `Params.Round(ans - interm + offset)`, then `ReconstructElem` to rebuild the 64-bit piece.
+
+The answer matrix is read and never written (upstream `Recover` subtracts and re-adds `interm` in place). Timers wrap `recoverRecord` only.
+
+**Check.** On the first online repetition (including a warm-up one) the adapter calls upstream `Recover` for the record's first and last piece, outside every timer, on the same query, answer, hint and secret as the timed decode, and exits 1 with a `decode check` message if either piece differs. This runs on faulted repetitions too, since `Recover` and `recoverRecord` see the same faulted inputs and must agree.
 
 ## Wire encoding and bytes
 

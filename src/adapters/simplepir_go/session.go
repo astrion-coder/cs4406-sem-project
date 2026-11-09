@@ -62,14 +62,15 @@ type session struct {
 	faultOff *stream
 	check    *stream
 
-	squished     bool
-	faultChecked bool
-	serverShared pir.State
-	serverState  pir.State
-	hintBytes    []byte
-	aBytes       []byte
-	clientA      pir.State
-	clientH      pir.Msg
+	squished      bool
+	faultChecked  bool
+	decodeChecked bool
+	serverShared  pir.State
+	serverState   pir.State
+	hintBytes     []byte
+	aBytes        []byte
+	clientA       pir.State
+	clientH       pir.Msg
 }
 
 func (s *session) record(r uint64, buf []byte) {
@@ -216,13 +217,49 @@ func (s *session) clientStates() {
 	}
 }
 
-// recoverRecord runs Recover once per piece of record idx.
+// recoverRecord decodes record idx once. Everything that does not depend on
+// the piece (the query offset and H * secret over the whole column) is
+// computed once, then each piece is read out of the answer rows it occupies
+// and rebuilt with ReconstructElem. It is Recover's body with the
+// piece-independent part hoisted out of the per-piece loop, written with
+// exported functions only, and it leaves the answer untouched.
 func (s *session) recoverRecord(idx uint64, query, ans pir.Msg, cstate pir.State) []uint64 {
+	p, info := s.p, s.db.Info
+	a := ans.Data[0]
+
+	offset := uint64(0)
+	for j := uint64(0); j < p.M; j++ {
+		offset += (p.P / 2) * query.Data[0].Get(j, 0)
+	}
+	offset %= 1 << p.Logq
+	offset = 1<<p.Logq - offset
+
+	interm := pir.MatrixMul(s.clientH.Data[0], cstate.Data[0])
+
 	got := make([]uint64, s.lay.Pieces)
+	vals := make([]uint64, info.Ne)
 	for k := range got {
-		got[k] = s.pi.Recover(s.lay.Entry(idx, k), 0, s.clientH, query, ans, s.clientA, cstate, s.p, s.db.Info)
+		entry := s.lay.Entry(idx, k)
+		row := entry / p.M
+		for e := range vals {
+			j := row*info.Ne + uint64(e)
+			vals[e] = p.Round(uint64(a.Data[j]-interm.Data[j]) + offset)
+		}
+		got[k] = pir.ReconstructElem(vals, entry, info)
 	}
 	return got
+}
+
+// checkAgainstUpstream compares the decode with the library's own Recover on
+// the record's first and last piece. Recover is called outside every timer.
+func (s *session) checkAgainstUpstream(idx uint64, got []uint64, query, ans pir.Msg, cstate pir.State) error {
+	for _, k := range []int{0, len(got) - 1} {
+		want := s.pi.Recover(s.lay.Entry(idx, k), 0, s.clientH, query, ans, s.clientA, cstate, s.p, s.db.Info)
+		if got[k] != want {
+			return fmt.Errorf("decode check: record %d piece %d got %x, upstream Recover %x", idx, k, got[k], want)
+		}
+	}
+	return nil
 }
 
 func sameRecord(a, b []uint64) bool {
@@ -293,6 +330,12 @@ func (s *session) onlineRecord(rep, warmup int) (Record, error) {
 
 	var got []uint64
 	rc := timed(func() { got = s.recoverRecord(idx, query, clientAns, cstate) })
+	if !s.decodeChecked {
+		if err := s.checkAgainstUpstream(idx, got, query, clientAns, cstate); err != nil {
+			return Record{}, err
+		}
+		s.decodeChecked = true
+	}
 	if restoreHint != nil {
 		restoreHint()
 	}

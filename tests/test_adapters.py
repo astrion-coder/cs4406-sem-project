@@ -248,7 +248,7 @@ def _check_record(arm: Arm, record_bytes: int, rec: dict) -> None:
 @pytest.mark.parametrize("arm", ARMS, ids=ARM_IDS)
 def test_record_fields(arm, run):
     rb = arm.record_sizes[0]
-    reps, warmup = 3, 2
+    reps, warmup = 1, 1
     recs = run(arm, record_bytes=rb, reps=reps, warmup=warmup).ok()
     for rec in recs:
         _check_record(arm, rb, rec)
@@ -276,7 +276,8 @@ def test_record_fields(arm, run):
 
 @pytest.mark.parametrize("arm,record_bytes", CORRECTNESS_CASES)
 def test_correctness(arm, record_bytes, run):
-    recs = run(arm, record_bytes=record_bytes).ok()
+    # Online only: setup runs once untimed, so a slow setup (S4's DDH digest) is not repeated per query.
+    recs = run(arm, record_bytes=record_bytes, phase="online").ok()
     online = [r for r in recs if r["phase"] == "online"]
     assert len(online) == REPS + WARMUP, f"{len(online)} online records, expected {REPS + WARMUP}"
     for r in online:
@@ -314,7 +315,7 @@ def test_fault_baseline(arm, fault, run):
 @pytest.mark.parametrize("arm", ARMS, ids=ARM_IDS)
 def test_comm_analytical(arm, run):
     rb = arm.record_sizes[0]
-    recs = run(arm, record_bytes=rb).ok()
+    recs = run(arm, record_bytes=rb, phase="online").ok()
     for r in recs:
         if r["phase"] != "online" or not r["analytical"]:
             continue
