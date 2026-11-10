@@ -1,0 +1,19 @@
+{
+ "run_id": "p7-findings-20261110T105629Z",
+ "git_sha": "c4b68d621f291f73b70f865e069ca567de685253",
+ "dirty": false,
+ "adapters": {
+  "apir-adapter": {
+   "sha256": "0d79e3f0395506cafae23b51817ea587a7593d7e5d52fd801b58230f12c51e89",
+   "built": "2026-11-10T10:56:19.814843+00:00"
+  },
+  "simplepir-adapter": {
+   "sha256": "fb4ceb6f3b76a6e31b6b599768171cb1680b8b0dc0bdc277ef425160c930ff40",
+   "built": "2026-11-10T10:56:18.305887+00:00"
+  },
+  "vsp-adapter": {
+   "sha256": "60839b1e22ccee61a08acd587577462dca87ef75baf1e4161e9105c909c147db",
+   "built": "2026-11-10T10:56:22.127963+00:00"
+  }
+ }
+}

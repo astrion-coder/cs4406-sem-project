@@ -1,0 +1,8 @@
+{"case": "M1 wrong_record switch_replica cheat", "exit": 0, "over_cap": false, "records": 100, "peak_footprint_gib": 0.025925353169441223, "wall_s": 4.302852583001368}
+{"case": "M0 honest", "exit": 0, "over_cap": false, "records": 200, "peak_footprint_gib": 0.006943352520465851, "wall_s": 0.11641070799669251}
+{"case": "S3 honest", "exit": 0, "over_cap": false, "records": 200, "peak_footprint_gib": 0.28997885435819626, "wall_s": 102.40524687500147}
+{"case": "S4 honest 64 KiB", "exit": 0, "over_cap": false, "records": 40, "peak_footprint_gib": 0.012085609138011932, "wall_s": 462.62868674998754}
+{"case": "S0-go honest", "exit": 0, "over_cap": false, "records": 200, "peak_footprint_gib": 0.04385436326265335, "wall_s": 14.563179250006215}
+{"case": "S0-cpp honest", "exit": 0, "over_cap": false, "records": 200, "peak_footprint_gib": 0.029602453112602234, "wall_s": 34.17977158399299}
+{"case": "S1 honest", "exit": 0, "over_cap": false, "records": 200, "peak_footprint_gib": 0.10530170798301697, "wall_s": 157.14909979100048}
+{"case": "S2 re_preprocess 0.5", "exit": 0, "over_cap": false, "records": 200, "peak_footprint_gib": 0.2386331632733345, "wall_s": 446.5628073330008}

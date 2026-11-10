@@ -9,8 +9,10 @@ This plan divides the remaining work between the two of us. The build contract i
 - Phase P0 is done. All three upstream codebases (SimplePIR, VeriSimplePIR, and Colombo et al.'s apir-code) build and pass their own test suites natively on the M1 Pro (`notebooks/01_g0_upstream_tests.ipynb`, cell 1). That is gate G0.
 - `make setup`, `make build`, `make test` and `make sysinfo` work. The `verify-vpir-bench` skill drives and checks them.
 - Phase P1 is done. Three adapters in `src/adapters/` cover all eight configurations, and they pass the conformance test (`notebooks/02_g1_conformance.ipynb`, cell 1). That is gate G1. `make conformance` reruns it.
-- IC-8's `docs/serve_protocol.md` is drafted for SG's load generator. The P7 faults and recovery rules are in `src/adapters/README.md`, with their test in `tests/test_recovery.py`.
-- The harness, analysis and results do not exist yet.
+- P7's adapter side is done. All eight configurations inject the P7 faults and run the recovery policies, and `make recovery` passes 159 of 159 (`notebooks/03_p7_recovery.ipynb`, cell 1). The recovery experiments (IC-7's 100 trials per case, the cheating-rate sweep, F12 and F13) wait for the harness.
+- IC-8's serve mode is done. `docs/serve_protocol.md` is the contract for SG's load generator. Every adapter has `--mode serve` and `--mode client`, `tests/test_serve.py` (gate G6, `test_concurrent_correctness`) passes 157 of 157, and the race detector and ThreadSanitizer found nothing. The core sweep (W = 1, 2, 4, 6) and F11 wait for SG's load generator.
+- Every adapter run in the tests is capped at a 2 GiB memory footprint (`harness/memcap.py`), after a cheating M1 run exhausted the Mac's memory. The cause is in upstream apir-code: a corrupted Merkle proof makes `merkle.DecodeProof` allocate up to 96 GiB (`notebooks/04_p7_memory_findings.ipynb`).
+- The harness, analysis and benchmark results do not exist yet. The grid runner (SG-4) is now the critical path.
 - Scope is everything in the spec. That means all eight configurations, the Tier 1 and Tier 2 phases P1 to P9, and the Tier 3 stretch phase P10 last.
 - This schedule assumes the 20 November deadline from earlier course notes. Nobody has confirmed it.
 
