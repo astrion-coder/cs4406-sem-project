@@ -21,7 +21,7 @@ This document fixes how a client talks to an adapter running as a server, for ph
 - `--listen 127.0.0.1:0` picks a free port. When the server is ready to answer, it writes exactly one line to stderr: `vpir-serve ready HOST:PORT`, with the real port. The harness waits for that line.
 - The client takes the same `--arm`, `--db-bytes`, `--record-bytes` and `--seed` as the server, because it rebuilds its offline state itself (see "Session").
 - `--fault` is a usage error (exit 2) in both modes. A targeted fault needs the queried index, which a PIR server does not know. Fault and recovery runs (RQ4) stay in bench mode.
-- Exit codes are as in bench mode. On SIGTERM or SIGINT the server stops accepting connections, answers the queries it has already read, appends one summary record to `--out` if it was given, and exits 0.
+- Exit codes are as in bench mode. On SIGTERM or SIGINT the server stops accepting connections, answers the queries it has already read, appends one summary record to `--out` if it was given, and exits 0. The summary record is one JSON object: `"mode": "serve"`, the `INFO` fields except `scheme_params`, and the final `STATS` fields (see "Server statistics").
 
 ## Framing
 
@@ -33,7 +33,7 @@ u8   type
 ...  body
 ```
 
-All integers are unsigned and big-endian. A peer that receives a frame longer than 1 GiB, or a type it does not know, sends `ERROR` with request id 0 and closes the connection.
+All integers are unsigned and big-endian. A peer that receives a frame longer than 1 GiB, or a type it does not know, sends `ERROR` with request id 0 and closes the connection. A server reads the header alone before deciding, so it never waits for the body of an oversized frame. A server accepts only the three client-to-server types, `HELLO`, `QUERY` and `STATS_REQ`. Any other type, `EXPECT` included, is unknown to it.
 
 | Type | Name | Direction | Body |
 |---|---|---|---|
@@ -58,6 +58,8 @@ A connection starts with `HELLO`, and the server replies `INFO`:
  "upstream_sha": "...", "db_sha256": "...", "public_seed": "..." , "scheme_params": {}}
 ```
 
+`record_bytes` is null for S3 and S4, as in bench records, and `n_records` counts bits for them (`8 × db_bytes`).
+
 The protocol does not transfer offline state. The client rebuilds it from the same `--seed`, untimed, and checks the fingerprint before its first query. RQ3a and RQ3b take offline bytes and times from bench mode, and nothing in serve mode measures them.
 
 - `db_sha256` is the SHA-256 of the seeded database bytes.
@@ -70,7 +72,7 @@ The protocol does not transfer offline state. The client rebuilds it from the sa
 - A client may pipeline queries on one connection. The server can answer them out of order, so the client matches answers by `req_id`. The load generator's closed loop keeps one query in flight per client, and its open loop pipelines.
 - Readers put each complete `QUERY` on one FIFO queue shared by the W workers. The queue holds at most 4096 queries, and a full queue stops the readers, which pushes back through TCP. A worker answers one query at a time, so at most W library `Answer` calls run at once.
 - `answer_ns` is the monotonic time around the library's answer call alone, which is the span bench mode times as `server_answer_s`. `queue_ns` runs from the moment the frame has been read to the moment a worker starts on it.
-- The server checks each query's length against the size its parameters imply, and sends `ERROR` without calling the library when it differs. Upstream answers abort the whole process on a malformed input (`mat_packed.cpp:424`, `assert(a.mat.rows % 8 == 0)`; `log.Fatal` in apir-code's `pir_point.go:46,56`).
+- The server checks each query's length against the size its parameters imply, and sends `ERROR` with that query's `req_id` without calling the library when it differs. The connection stays open, and later queries on it are answered. Upstream answers abort the whole process on a malformed input (`mat_packed.cpp:424`, `assert(a.mat.rows % 8 == 0)`; `log.Fatal` in apir-code's `pir_point.go:46,56`).
 - For a two-server arm, the client sends one `QUERY` to each server and finishes when both answers have arrived.
 
 ## Server statistics
@@ -81,6 +83,8 @@ The protocol does not transfer offline state. The client rebuilds it from the sa
 {"wall_s": 12.5, "cpu_user_s": 40.1, "cpu_sys_s": 0.4, "peak_rss_bytes": 123456789,
  "answered": 9001, "queued": 3}
 ```
+
+`answered` counts the `ANSWER` frames written so far, and `queued` the queries read but not yet started by a worker.
 
 The load generator asks at the start and the end of its steady-state window. `server_cpu_util` = 100 × Δ(`cpu_user_s` + `cpu_sys_s`) / Δ`wall_s`, which can exceed 100 with several workers, as psutil's per-process figure does. `server_peak_rss_bytes` comes from the final `STATS`, or from the server's summary record. CPU and memory come from `getrusage` on the server itself, so no external sampler is needed.
 
