@@ -2,13 +2,23 @@
 
 #include "pir/preproc_pir.h"
 
+#include <algorithm>
+#include <atomic>
 #include <cerrno>
+#include <chrono>
+#include <condition_variable>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <deque>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <new>
+#include <openssl/evp.h>
+#include <pthread.h>
+#include <thread>
 #include <type_traits>
 #include <stdexcept>
 #include <sys/mman.h>
@@ -17,6 +27,7 @@
 #include <unistd.h>
 
 #include "json.h"
+#include "wire.h"
 
 #ifndef UPSTREAM_SHA
 #error "build with -DUPSTREAM_SHA=\"<verisimplepir commit>\""
@@ -92,16 +103,64 @@ constexpr uint64_t kMaxPadding = 64;   // largest library database, in entries, 
 
 // ---------------------------------------------------------------- options
 
+// Bench mode is the default; serve and client mode follow docs/serve_protocol.md.
+enum class Mode : unsigned { Bench = 1, Serve = 2, Client = 4 };
+
+struct ModeSpec {
+    const char* name;
+    Mode mode;
+};
+
+constexpr ModeSpec kModes[] = {{"bench", Mode::Bench}, {"serve", Mode::Serve}, {"client", Mode::Client}};
+
+constexpr unsigned kBench = unsigned(Mode::Bench), kServe = unsigned(Mode::Serve), kClient = unsigned(Mode::Client);
+
+// Which modes take each flag, and which require it.
+struct FlagSpec {
+    const char* name;
+    bool takes_value;
+    unsigned modes, required_in;
+};
+
+constexpr FlagSpec kFlags[] = {
+    {"--mode", true, kServe | kClient, kServe | kClient},
+    {"--arm", true, kBench | kServe | kClient, kBench | kServe | kClient},
+    {"--db-bytes", true, kBench | kServe | kClient, kBench | kServe | kClient},
+    {"--record-bytes", true, kBench | kServe | kClient, kBench | kServe | kClient},
+    {"--phase", true, kBench, kBench},
+    {"--reps", true, kBench, kBench},
+    {"--warmup", true, kBench, kBench},
+    {"--seed", true, kBench | kServe | kClient, kBench | kServe | kClient},
+    {"--fault", true, kBench, 0},
+    {"--fault-prob", true, kBench, 0},
+    {"--recovery", true, kBench, 0},
+    {"--replicas-cheat", false, kBench, 0},
+    {"--workers", true, kServe, kServe},
+    {"--listen", true, kServe, kServe},
+    {"--server-id", true, kServe, 0},
+    {"--connect", true, kClient, kClient},
+    {"--session-queries", true, kClient, kClient},
+    {"--corpus-out", true, kClient, 0},
+    {"--out", true, kBench | kServe | kClient, kBench | kClient},
+};
+
+constexpr uint64_t kMaxWorkers = 256;
+
 struct Options {
+    Mode mode = Mode::Bench;
     const ArmSpec* arm = nullptr;
     uint64_t db_bytes = 0, record_bytes = 0;
     bool offline = false, online = false;
-    uint64_t reps = 0, warmup = 0, seed = 0;
+    uint64_t reps = 0, warmup = 0, seed = 0;  // client mode: reps is --session-queries
     const FaultSpec* fault = &kFaults[0];
     double fault_prob = 0.0;
     const PolicySpec* recovery = &kPolicies[0];
     bool replicas_cheat = false;
     std::string out;
+    uint64_t workers = 0;                 // serve
+    std::optional<wire::Endpoint> listen;  // serve
+    std::optional<wire::Endpoint> connect;  // client
+    std::string corpus_out;               // client
 };
 
 constexpr const char* kUsage =
@@ -111,9 +170,15 @@ constexpr const char* kUsage =
     "                           stale_record|drop_server|bad_proof\n"
     "                   [--fault-prob F] [--recovery abort|switch_replica|re_preprocess]\n"
     "                   [--replicas-cheat] --out PATH.jsonl\n"
+    "       vsp-adapter --mode serve --arm ARM --db-bytes N --record-bytes N --seed N\n"
+    "                   --workers W --listen HOST:PORT [--server-id 0] [--out PATH.jsonl]\n"
+    "       vsp-adapter --mode client --arm ARM --db-bytes N --record-bytes N --seed N\n"
+    "                   --connect HOST:PORT --session-queries Q --out PATH.jsonl\n"
+    "                   [--corpus-out PATH]\n"
     "\n"
     "Drives VeriSimplePIR (third_party/verisimplepir) and appends one JSON record per\n"
-    "repetition and phase to --out. Contract: src/adapters/README.md.\n"
+    "repetition and phase to --out. Contract: src/adapters/README.md. Serve and client\n"
+    "mode: docs/serve_protocol.md.\n"
     "Exit codes: 0 records written, 1 internal failure, 2 usage error.\n";
 
 struct UsageError : std::runtime_error {
@@ -129,38 +194,65 @@ uint64_t parse_u64(const std::string& flag, const std::string& v) {
     return x;
 }
 
+wire::Endpoint parse_endpoint(const std::string& flag, const std::string& v) {
+    const auto e = wire::parse_endpoint(v);
+    if (!e) throw UsageError(flag + " needs HOST:PORT, got '" + v + "'");
+    return *e;
+}
+
 Options parse_args(int argc, char** argv) {
-    Options o;
-    bool have_arm = false, have_db = false, have_record = false, have_phase = false;
-    bool have_reps = false, have_warmup = false, have_seed = false, have_prob = false;
+    std::map<std::string, std::string> given;  // flag to value, "" for --replicas-cheat
     for (int i = 1; i < argc; i++) {
         const std::string flag = argv[i];
-        if (flag == "--replicas-cheat") {
-            o.replicas_cheat = true;
-            continue;
+        const FlagSpec* spec = nullptr;
+        for (const auto& f : kFlags)
+            if (flag == f.name) spec = &f;
+        if (!spec) throw UsageError("unknown flag " + flag);
+        if (spec->takes_value && i + 1 >= argc) throw UsageError(flag + " needs a value");
+        given[flag] = spec->takes_value ? argv[++i] : "";
+    }
+
+    Options o;
+    const ModeSpec* mode = &kModes[0];
+    if (given.count("--mode")) {
+        mode = nullptr;
+        for (const auto& m : kModes)
+            if (given["--mode"] == m.name && m.mode != Mode::Bench) mode = &m;
+        if (!mode) throw UsageError("--mode must be serve or client, not '" + given["--mode"] + "'");
+    }
+    o.mode = mode->mode;
+    std::string missing;
+    for (const auto& f : kFlags) {
+        if (given.count(f.name) && !(f.modes & unsigned(o.mode))) {
+            if (std::string(f.name) == "--fault")
+                throw UsageError("--fault is a bench-mode flag: a targeted fault needs the queried index, which a "
+                                 "PIR server does not know (docs/serve_protocol.md)");
+            throw UsageError(std::string(f.name) + " is not a " + mode->name + "-mode flag");
         }
-        if (i + 1 >= argc) throw UsageError(flag + " needs a value");
-        const std::string v = argv[++i];
+        if (!given.count(f.name) && (f.required_in & unsigned(o.mode))) missing += std::string(missing.empty() ? "" : ", ") + f.name;
+    }
+    if (!missing.empty()) throw UsageError(std::string(mode->name) + " mode requires " + missing);
+
+    bool have_prob = false;
+    for (const auto& [flag, v] : given) {
         if (flag == "--arm") {
             for (const auto& a : kArms)
                 if (v == a.name) o.arm = &a;
             if (!o.arm) throw UsageError("this adapter serves S0-cpp, S1 and S2, not '" + v + "'");
-            have_arm = true;
         } else if (flag == "--db-bytes") {
-            o.db_bytes = parse_u64(flag, v), have_db = true;
+            o.db_bytes = parse_u64(flag, v);
         } else if (flag == "--record-bytes") {
-            o.record_bytes = parse_u64(flag, v), have_record = true;
+            o.record_bytes = parse_u64(flag, v);
         } else if (flag == "--phase") {
             o.offline = v == "offline" || v == "all";
             o.online = v == "online" || v == "all";
             if (!o.offline && !o.online) throw UsageError("--phase must be offline, online or all");
-            have_phase = true;
         } else if (flag == "--reps") {
-            o.reps = parse_u64(flag, v), have_reps = true;
+            o.reps = parse_u64(flag, v);
         } else if (flag == "--warmup") {
-            o.warmup = parse_u64(flag, v), have_warmup = true;
+            o.warmup = parse_u64(flag, v);
         } else if (flag == "--seed") {
-            o.seed = parse_u64(flag, v), have_seed = true;
+            o.seed = parse_u64(flag, v);
         } else if (flag == "--fault") {
             o.fault = nullptr;
             for (const auto& f : kFaults)
@@ -179,14 +271,30 @@ Options parse_args(int argc, char** argv) {
             if (!o.recovery)
                 throw UsageError("--recovery must be abort, switch_replica or re_preprocess, not '" + v +
                                  "' (retry_same is never allowed)");
+        } else if (flag == "--replicas-cheat") {
+            o.replicas_cheat = true;
         } else if (flag == "--out") {
             o.out = v;
-        } else {
-            throw UsageError("unknown flag " + flag);
+        } else if (flag == "--workers") {
+            o.workers = parse_u64(flag, v);
+            if (o.workers == 0 || o.workers > kMaxWorkers)
+                throw UsageError("--workers must be between 1 and " + std::to_string(kMaxWorkers));
+        } else if (flag == "--listen") {
+            o.listen = parse_endpoint(flag, v);
+        } else if (flag == "--server-id") {
+            if (parse_u64(flag, v) != 0) throw UsageError("S0-cpp, S1 and S2 have one server, so --server-id must be 0");
+        } else if (flag == "--connect") {
+            if (v.find(',') != std::string::npos)
+                throw UsageError("S0-cpp, S1 and S2 have one server, so --connect takes one HOST:PORT");
+            o.connect = parse_endpoint(flag, v);
+        } else if (flag == "--session-queries") {
+            o.reps = parse_u64(flag, v);
+            if (o.reps == 0) throw UsageError("--session-queries must be positive");
+        } else if (flag == "--corpus-out") {
+            o.corpus_out = v;
         }
     }
-    if (!have_arm || !have_db || !have_record || !have_phase || !have_reps || !have_warmup || !have_seed || o.out.empty())
-        throw UsageError("--arm, --db-bytes, --record-bytes, --phase, --reps, --warmup, --seed and --out are required");
+    if (given.count("--out") && o.out.empty()) throw UsageError("--out needs a path");
     if (o.record_bytes == 0) throw UsageError("--record-bytes must be positive for " + std::string(o.arm->name));
     if (o.db_bytes == 0 || o.db_bytes % o.record_bytes)
         throw UsageError("--db-bytes must be a positive multiple of --record-bytes");
@@ -197,6 +305,8 @@ Options parse_args(int argc, char** argv) {
     if (o.fault->kind == kWrongRecord && o.db_bytes / o.record_bytes < 2)
         throw UsageError("wrong_record needs at least two records");
     if (!have_prob) o.fault_prob = o.fault->kind == kNone ? 0.0 : 1.0;
+    // A client's queries are online records of a fault-free run, with no warm-up.
+    if (o.mode == Mode::Client) o.online = true;
     return o;
 }
 
@@ -396,7 +506,43 @@ private:
     osuCrypto::PRNG prng_;
 };
 
-enum Purpose : uint64_t { kDatabase = 1, kIndex = 2, kFault = 3 };
+enum Purpose : uint64_t { kDatabase = 1, kIndex = 2, kFault = 3, kPublic = 4 };
+
+// The public matrices A, and A_2 for S1 and S2. Bench mode draws them as upstream's Init and
+// PreprocInit do, from system randomness. Serve and client mode draw them with upstream's
+// pseudorandom, the same distribution, from seeds taken in turn from the kPublic stream, so a
+// client rebuilds the server's offline state from --seed (docs/serve_protocol.md, "Session").
+struct PublicSeeds {
+    SeedType a, a2_q, a2_kappa;
+    std::string hex;  // INFO's public_seed: the kPublic stream's key, toBlock(kPublic, seed)
+
+    explicit PublicSeeds(uint64_t seed) {
+        Stream s(seed, kPublic);
+        const auto block = [&] {
+            const uint64_t hi = s.next();
+            return osuCrypto::toBlock(hi, s.next());
+        };
+        a = block();
+        a2_q = block();
+        a2_kappa = block();
+        char buf[33];
+        std::snprintf(buf, sizeof buf, "%016llx%016llx", (unsigned long long)kPublic, (unsigned long long)seed);
+        hex = buf;
+    }
+
+    // Init's body (lhe.cpp:4-8) and PreprocInit's (multilimb_lhe.cpp:70-75), seeded.
+    Matrix init(const VeriSimplePIR& pir) const {
+        Matrix A(pir.m, LHE::n);
+        pseudorandom(A, a);
+        return A;
+    }
+    Multi_Limb_Matrix preproc_init(const VeriSimplePIR& pir) const {
+        Multi_Limb_Matrix A(pir.ell, Multi_Limb_LHE::n);
+        pseudorandom(A.q_data, a2_q);
+        pseudorandom(A.kappa_data, a2_kappa, pir.preproc_lhe.kappa);
+        return A;
+    }
+};
 
 // The database: db_bytes random bytes, record r at [r * record_bytes, (r + 1) * record_bytes).
 std::vector<uint8_t> database_bytes(uint64_t db_bytes, uint64_t seed) {
@@ -670,14 +816,14 @@ struct OfflineResult {
 };
 
 OfflineResult run_offline(const VeriSimplePIR& pir, const ArmSpec& arm, const ServerDB& db,
-                          std::optional<OfflineFlip> flip) {
+                          std::optional<OfflineFlip> flip, const PublicSeeds* seeds = nullptr) {
     OfflineResult out;
     OfflineMetrics& r = out.metrics;
     out.state = std::make_unique<ClientState>();
     ClientState& c = *out.state;
     const WireBits w = wire_bits(pir);
 
-    timed(r.public_params, [&] { c.A = pir.Init(); });
+    timed(r.public_params, [&] { c.A = seeds ? seeds->init(pir) : pir.Init(); });
     timed(r.server_preproc, [&] { c.H = pir.GenerateHint(c.A, db.D); });
 
     if (!arm.preproc) {
@@ -690,7 +836,7 @@ OfflineResult run_offline(const VeriSimplePIR& pir, const ArmSpec& arm, const Se
 
     Multi_Limb_Matrix A2(0, 0), H2(0, 0);
     unsigned char server_hash[SHA256_DIGEST_LENGTH], client_hash[SHA256_DIGEST_LENGTH];
-    timed(r.public_params, [&] { A2 = pir.PreprocInit(); });
+    timed(r.public_params, [&] { A2 = seeds ? seeds->preproc_init(pir) : pir.PreprocInit(); });
     timed(r.server_preproc, [&] {
         H2 = pir.PreprocGenerateHint(A2, db.D_T);
         pir.HashAandH(server_hash, A2, H2);
@@ -789,10 +935,11 @@ std::vector<uint64_t> truth_of(const Layout& l, const std::vector<uint8_t>& byte
 // One query and its answer. Trivially copyable, because a re_preprocess attempt runs it in a
 // forked child and returns it through shared memory.
 struct QueryResult {
-    Span query_gen, answer;
+    Span query_gen, answer;  // client mode: answer.wall is the server's answer_ns, and its CPU time is unknown
     std::optional<Span> verify, recover;
     uint64_t up_bytes = 0, down_bytes = 0;
     std::optional<bool> correct, detected;
+    Span rtt;  // client mode: from the first byte of QUERY sent to the last byte of ANSWER received
 
     bool accepted() const { return correct.has_value(); }  // the client decodes only what it accepts
     Span total() const {
@@ -971,8 +1118,11 @@ void put_span(Json::Fields& f, const std::string& name, const std::optional<Span
 
 // Every record carries every metric key; the other phase's are null, and so are the recovery
 // metrics unless a further attempt was made. An offline record's peak RSS is its child's; an
-// online record's is this process's.
-Json metrics(Phase phase, const OfflineMetrics* off, const QueryResult* on, const Recovery* rec) {
+// online record's is this process's. A client-mode record adds rtt_s and rtt_cpu_s, and its
+// server_answer_cpu_s entries are null because the ANSWER frame carries only answer_ns.
+Json metrics(Phase phase, const OfflineMetrics* off, const QueryResult* on, const Recovery* rec,
+             Mode mode = Mode::Bench) {
+    const bool client = mode == Mode::Client;
     const auto span = [](const OfflineMetrics* r, Span OfflineMetrics::*m) {
         return r ? std::optional<Span>(r->*m) : std::nullopt;
     };
@@ -991,7 +1141,7 @@ Json metrics(Phase phase, const OfflineMetrics* off, const QueryResult* on, cons
     f.emplace_back("up_bytes", integer(on, on ? on->up_bytes : 0));
     f.emplace_back("up_bytes_per_server", one(on, Json::integer(on ? on->up_bytes : 0)));
     f.emplace_back("server_answer_s", one(on, num(on ? on->answer.wall : 0)));
-    f.emplace_back("server_answer_cpu_s", one(on, num(on ? on->answer.cpu : 0)));
+    f.emplace_back("server_answer_cpu_s", one(on, client ? Json::null() : num(on ? on->answer.cpu : 0)));
     f.emplace_back("down_bytes", integer(on, on ? on->down_bytes : 0));
     f.emplace_back("down_bytes_per_server", one(on, Json::integer(on ? on->down_bytes : 0)));
     put_span(f, "client_recover", on ? on->recover : std::nullopt);
@@ -1002,6 +1152,10 @@ Json metrics(Phase phase, const OfflineMetrics* off, const QueryResult* on, cons
     f.emplace_back("recovery_up_bytes", integer(retried, retried ? rec->up_bytes : 0));
     f.emplace_back("recovery_down_bytes", integer(retried, retried ? rec->down_bytes : 0));
     f.emplace_back("process_peak_rss_bytes", Json::integer(off ? off->peak_rss_bytes : peak_rss_bytes()));
+    if (client) {
+        f.emplace_back("rtt_s", one(on, num(on ? on->rtt.wall : 0)));
+        f.emplace_back("rtt_cpu_s", one(on, num(on ? on->rtt.cpu : 0)));
+    }
     return Json::object(f);
 }
 
@@ -1050,6 +1204,8 @@ Json scheme_params(const ArmSpec& arm, const Options& o, const std::optional<Lay
                               "wire_bits_multi_limb", "wire_bits_proof"})
             f.emplace_back(k, Json::null());
     }
+    // Spec 9: the server's W workers answer different queries; the library has no intra-query threads.
+    if (o.mode != Mode::Bench) f.emplace_back("parallelism", Json::string("inter_query"));
     return Json::object(f);
 }
 
@@ -1091,7 +1247,14 @@ std::optional<std::string> env(const char* name) {
     return std::string(v);
 }
 
+const char* mode_name(Mode m) {
+    for (const auto& s : kModes)
+        if (s.mode == m) return s.name;
+    return "?";
+}
+
 // One record. Run-wide fields are fixed at construction; each repetition fills the rest.
+// Bench records carry no mode field; client records add "mode": "client".
 struct Record {
     const Options& o;
     Json scheme_params;
@@ -1107,7 +1270,7 @@ struct Record {
     std::string to_json() const {
         const auto str = [](const std::string& s) { return Json::string(s); };
         const auto boolean = [](bool b) { return Json::boolean(b); };
-        return Json::object({
+        Json::Fields f = {
             {"run_id", Json::optional(env("VPIR_RUN_ID"), str)},
             {"git_sha_harness", Json::optional(env("VPIR_GIT_SHA"), str)},
             {"platform", Json::optional(env("VPIR_PLATFORM"), str)},
@@ -1136,7 +1299,9 @@ struct Record {
             {"correct", Json::optional(correct, boolean)},
             {"detected", Json::optional(detected, boolean)},
             {"error", Json::optional(error, str)},
-        }).text();
+        };
+        if (o.mode != Mode::Bench) f.emplace_back("mode", Json::string(mode_name(o.mode)));
+        return Json::object(f).text();
     }
 };
 
@@ -1146,8 +1311,9 @@ public:
         if (!f_) throw std::runtime_error("cannot open --out " + path + ": " + std::strerror(errno));
     }
     ~Sink() { std::fclose(f_); }
-    void write(const Record& r) {
-        const std::string line = r.to_json() + "\n";
+    void write(const Record& r) { write(r.to_json()); }
+    void write(const std::string& record) {
+        const std::string line = record + "\n";
         if (std::fwrite(line.data(), 1, line.size(), f_) != line.size() || std::fflush(f_))
             throw std::runtime_error("write to --out failed");
     }
@@ -1171,29 +1337,16 @@ void write_unsupported(const Options& o, const std::string& why, Sink& sink) {
             r.phase = phase;
             r.rep = rep;
             r.status = "unsupported_params";
-            r.metrics = metrics(phase, nullptr, nullptr, nullptr);
+            r.metrics = metrics(phase, nullptr, nullptr, nullptr, o.mode);
             r.error = why;
             sink.write(r);
         }
     }
 }
 
-int run(const Options& o) {
-    Sink sink(o.out);
+int run_bench(const Options& o, const Layout& l, Sink& sink) {
     const ArmSpec& arm = *o.arm;
     const uint64_t total = o.warmup + o.reps;
-
-    auto [layout, why] = select_params(arm, o.db_bytes, o.record_bytes);
-    if (!layout) {
-        // Upstream prints progress before its message, so keep the last lines: the message and the assert.
-        size_t cut = why.size();
-        for (int lines = 0; lines < 3 && cut != std::string::npos && cut > 0; lines++) cut = why.rfind('\n', cut - 1);
-        if (cut != std::string::npos && cut < why.size()) why = why.substr(cut + 1);
-        std::fprintf(stderr, "%s: unsupported parameters: %s\n", arm.name, why.c_str());
-        write_unsupported(o, why, sink);
-        return 0;
-    }
-    const Layout& l = *layout;
     const auto pir = make_pir(arm, l);
     const std::vector<uint8_t> bytes = database_bytes(o.db_bytes, o.seed);
     const ServerDB db(*pir, arm, l, bytes, o.fault->kind == kStaleRecord);
@@ -1242,6 +1395,609 @@ int run(const Options& o) {
     return 0;
 }
 
+// ---------------------------------------------------------------- serve and client mode
+//
+// docs/serve_protocol.md. Queries and answers travel in the bench-mode encodings: a query is
+// ct's m elements and an answer is ans's ell elements, each a 64-bit word, big-endian.
+
+uint64_t now_ns() {
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return uint64_t(ts.tv_sec) * 1000000000ULL + ts.tv_nsec;
+}
+
+std::string sha256(const void* data, size_t n) {
+    unsigned char md[EVP_MAX_MD_SIZE];
+    unsigned len = 0;
+    if (!EVP_Digest(data, n, md, &len, EVP_sha256(), nullptr)) throw std::runtime_error("SHA-256 failed");
+    return std::string(reinterpret_cast<const char*>(md), len);
+}
+
+std::string hex(const std::string& bytes) {
+    static const char digits[] = "0123456789abcdef";
+    std::string out;
+    for (unsigned char b : bytes) {
+        out += digits[b >> 4];
+        out += digits[b & 15];
+    }
+    return out;
+}
+
+void put_elems(std::string& out, const Matrix& m) {
+    const size_t at = out.size(), n = m.rows * m.cols;
+    out.resize(at + 8 * n);
+    auto* p = reinterpret_cast<uint8_t*>(&out[at]);
+    for (size_t i = 0; i < n; i++)
+        for (int b = 0; b < 8; b++) p[8 * i + b] = uint8_t(m.data[i] >> (56 - 8 * b));
+}
+
+void get_elems(const uint8_t* p, Matrix& m) {
+    for (size_t i = 0; i < m.rows * m.cols; i++) m.data[i] = wire::get_be(p + 8 * i, 8);
+}
+
+// INFO's fields but scheme_params (docs/serve_protocol.md, "Session"). The client computes
+// them too and compares kFingerprint with the server's.
+Json::Fields info_fields(const Options& o, const std::vector<uint8_t>& bytes, const PublicSeeds& seeds) {
+    return {
+        {"protocol", Json::integer(1)},
+        {"arm", Json::string(o.arm->name)},
+        {"server_id", Json::integer(0)},
+        {"servers", Json::integer(1)},
+        {"db_bytes", Json::integer(o.db_bytes)},
+        {"record_bytes", Json::integer(o.record_bytes)},
+        {"n_records", Json::integer(o.db_bytes / o.record_bytes)},
+        {"seed", Json::integer(o.seed)},
+        {"workers", Json::integer(o.workers)},
+        {"upstream_sha", Json::string(UPSTREAM_SHA)},
+        {"db_sha256", Json::string(hex(sha256(bytes.data(), bytes.size())))},
+        {"public_seed", Json::string(seeds.hex)},
+    };
+}
+
+constexpr const char* kFingerprint[] = {"arm", "db_bytes", "record_bytes", "seed", "db_sha256", "public_seed"};
+
+// ------------------------------------------------ the server
+
+// The server's half of the offline phase: the calls bench mode times as public_params and
+// server_preproc. It runs once at startup and stays resident, as a server keeps the hint it
+// hands to new clients. The protocol sends none of it, because each client rebuilds it.
+struct ServerHint {
+    Matrix A, H;
+    Multi_Limb_Matrix A2{0, 0}, H2{0, 0};  // S1, S2
+    unsigned char hash[SHA256_DIGEST_LENGTH] = {};
+};
+
+std::unique_ptr<ServerHint> server_offline(const VeriSimplePIR& pir, const ArmSpec& arm, const ServerDB& db,
+                                           const PublicSeeds& seeds) {
+    auto h = std::make_unique<ServerHint>();
+    h->A = seeds.init(pir);
+    h->H = pir.GenerateHint(h->A, db.D);
+    if (arm.preproc) {
+        h->A2 = seeds.preproc_init(pir);
+        h->H2 = pir.PreprocGenerateHint(h->A2, db.D_T);
+        pir.HashAandH(h->hash, h->A2, h->H2);
+    }
+    return h;
+}
+
+// One client connection. Its reader thread and the workers answering its queries all write
+// frames to it, so a write holds the lock. The socket closes when the last of them lets go.
+class Connection {
+public:
+    explicit Connection(int fd) : fd(fd) {}
+    ~Connection() { close(fd); }
+    Connection(const Connection&) = delete;
+
+    // Whether the whole frame was written.
+    bool send(const std::string& frame) {
+        std::lock_guard<std::mutex> lock(mu_);
+        if (!broken_ && !wire::write_all(fd, frame)) broken_ = true;
+        return !broken_;
+    }
+
+    const int fd;
+    std::atomic<uint64_t> pending{0};  // its queries read and not yet answered
+
+private:
+    std::mutex mu_;
+    bool broken_ = false;  // a write failed, so the client has gone and later frames are dropped
+};
+
+// One QUERY on its way from a reader to a worker.
+struct Job {
+    std::shared_ptr<Connection> conn;
+    uint64_t req_id;
+    std::vector<Elem> ct;  // the query's m elements, freed with the job
+    uint64_t read_ns;      // when its frame had been read
+};
+
+// The FIFO the readers fill and the W workers drain. A full queue blocks the readers, which
+// pushes back on the clients through TCP.
+class JobQueue {
+public:
+    static constexpr size_t kCapacity = 4096;
+
+    void push(Job job) {
+        std::unique_lock<std::mutex> lock(mu_);
+        not_full_.wait(lock, [&] { return jobs_.size() < kCapacity; });
+        jobs_.push_back(std::move(job));
+        not_empty_.notify_one();
+    }
+
+    // The next job, or nullopt once the queue is closed and empty.
+    std::optional<Job> pop() {
+        std::unique_lock<std::mutex> lock(mu_);
+        not_empty_.wait(lock, [&] { return !jobs_.empty() || closed_; });
+        if (jobs_.empty()) return std::nullopt;
+        Job job = std::move(jobs_.front());
+        jobs_.pop_front();
+        not_full_.notify_one();
+        return job;
+    }
+
+    void close() {
+        std::lock_guard<std::mutex> lock(mu_);
+        closed_ = true;
+        not_empty_.notify_all();
+    }
+
+private:
+    std::mutex mu_;
+    std::condition_variable not_empty_, not_full_;
+    std::deque<Job> jobs_;
+    bool closed_ = false;
+};
+
+// What the server's threads share. The const members are fixed before the first thread
+// starts; the rest synchronise themselves.
+struct Server {
+    const VeriSimplePIR& pir;
+    const PackedMatrix& db;
+    const std::string arm;
+    const std::string info;  // the INFO frame
+    const int stop_fd;       // readable once SIGTERM or SIGINT has arrived
+    const uint64_t start_ns;
+    JobQueue queue;
+    std::atomic<uint64_t> answered{0};  // ANSWER frames written
+    std::atomic<uint64_t> queued{0};    // queries read and not yet started, a reader's blocked push included
+    std::mutex readers_mu;
+    std::condition_variable readers_done;
+    size_t readers = 0;
+};
+
+constexpr uint64_t kMaxHelloBytes = 4096;  // a HELLO is {"protocol": 1}
+
+Json::Fields stats(uint64_t start_ns, uint64_t answered, uint64_t queued) {
+    rusage ru;
+    getrusage(RUSAGE_SELF, &ru);
+    const auto secs = [](timeval t) { return t.tv_sec + t.tv_usec * 1e-6; };
+    return {
+        {"wall_s", num((now_ns() - start_ns) * 1e-9)},
+        {"cpu_user_s", num(secs(ru.ru_utime))},
+        {"cpu_sys_s", num(secs(ru.ru_stime))},
+        {"peak_rss_bytes", Json::integer(peak_rss_bytes())},
+        {"answered", Json::integer(answered)},
+        {"queued", Json::integer(queued)},
+    };
+}
+
+Json::Fields stats(const Server& s) { return stats(s.start_ns, s.answered, s.queued); }
+
+// A socket closed with unread input resets the connection, and the reset discards what the
+// client has not read yet. So a connection ends with FIN, and the server drops what the client
+// still sends until it closes, for at most this long.
+constexpr int kDrainMs = 2000;
+
+// ERROR for the connection, then close it.
+wire::Io refuse(Connection& c, const std::string& why) {
+    c.send(wire::error(0, why));
+    shutdown(c.fd, SHUT_WR);
+    wire::drain(c.fd, kDrainMs);
+    return wire::Io::Failed;
+}
+
+// After SIGTERM or SIGINT: drop what the client sends until the workers have answered every
+// query this connection had read, then end the connection.
+void finish(Connection& c) {
+    char sink[4096];
+    bool open = true;
+    while (c.pending > 0) {
+        if (open) {
+            const wire::Io io = wire::read_some(c.fd, sink, sizeof sink, -1, 10);
+            open = io == wire::Io::Ok || io == wire::Io::Timeout;
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    shutdown(c.fd, SHUT_WR);
+    wire::drain(c.fd, kDrainMs);
+}
+
+// A connection's reader: answers HELLO and STATS_REQ itself and queues each QUERY, until a read
+// ends, and says why. A malformed query gets ERROR without reaching the library, which aborts
+// the whole process on one (mat_packed.cpp:424).
+wire::Io serve_connection(Server& s, const std::shared_ptr<Connection>& conn) {
+    using wire::Io;
+    const int fd = conn->fd;
+    const uint64_t query_bytes = 8 * s.pir.m;
+    for (;;) {
+        uint8_t head[wire::kHeaderBytes];
+        if (const Io io = wire::read_exact(fd, head, 4, s.stop_fd); io != Io::Ok) return io;
+        const uint64_t length = wire::get_be(head, 4), body = length - 1;
+        if (length == 0 || length > wire::kMaxLength)
+            return refuse(*conn, "frame length " + std::to_string(length) + " is not between 1 and 2^30");
+        if (const Io io = wire::read_exact(fd, head + 4, 1, s.stop_fd); io != Io::Ok) return io;
+        const uint8_t type = head[4];
+        if (type == wire::kQuery) {
+            if (body < 8) return refuse(*conn, "a QUERY body starts with a u64 req_id");
+            uint8_t id[8];
+            if (const Io io = wire::read_exact(fd, id, sizeof id, s.stop_fd); io != Io::Ok) return io;
+            const uint64_t req_id = wire::get_be(id, 8);
+            if (body - 8 != query_bytes) {
+                if (const Io io = wire::skip(fd, body - 8, s.stop_fd); io != Io::Ok) return io;
+                conn->send(wire::error(req_id, "a query is " + std::to_string(query_bytes) + " bytes for " + s.arm +
+                                                   " at these parameters, not " + std::to_string(body - 8)));
+                continue;
+            }
+            Job job{conn, req_id, std::vector<Elem>(s.pir.m), 0};
+            if (const Io io = wire::read_exact(fd, job.ct.data(), query_bytes, s.stop_fd); io != Io::Ok) return io;
+            job.read_ns = now_ns();
+            for (Elem& e : job.ct) e = wire::get_be(reinterpret_cast<const uint8_t*>(&e), 8);
+            s.queued++;
+            conn->pending++;
+            s.queue.push(std::move(job));
+        } else if (type == wire::kHello) {
+            if (body > kMaxHelloBytes) return refuse(*conn, "HELLO is longer than " + std::to_string(kMaxHelloBytes) + " bytes");
+            std::string text(body, '\0');
+            if (const Io io = wire::read_exact(fd, text.data(), body, s.stop_fd); io != Io::Ok) return io;
+            const std::optional<JsonValue> hello = JsonValue::parse(text);
+            const JsonValue* protocol = hello ? hello->get("protocol") : nullptr;
+            if (!protocol || protocol->scalar_text() != "1") return refuse(*conn, "HELLO must be {\"protocol\": 1}");
+            conn->send(s.info);
+        } else if (type == wire::kStatsReq) {
+            if (body != 0) return refuse(*conn, "STATS_REQ has an empty body");
+            conn->send(wire::frame(wire::kStats, Json::object(stats(s)).text()));
+        } else {
+            return refuse(*conn, "frame type " + std::to_string(type) + " is not one a client sends");
+        }
+    }
+}
+
+void reader(Server& s, std::shared_ptr<Connection> conn) {
+    try {
+        if (serve_connection(s, conn) == wire::Io::Stopped) finish(*conn);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "vsp-adapter: dropped a connection: %s\n", e.what());
+    }
+    conn.reset();  // the socket closes now, or when the last queued query from it is answered
+    std::lock_guard<std::mutex> lock(s.readers_mu);
+    s.readers--;
+    s.readers_done.notify_all();
+}
+
+// answer_ns spans Answer alone, as bench mode's server_answer_s does. The answer and the
+// query are freed once the frame is built: Matrix has no destructor (mat.h:51-53).
+void worker(Server& s) {
+    while (std::optional<Job> job = s.queue.pop()) {
+        s.queued--;
+        Matrix ct;  // a view of the job's elements
+        ct.rows = job->ct.size();
+        ct.cols = 1;
+        ct.data = job->ct.data();
+        const uint64_t start = now_ns();
+        Matrix ans = s.pir.Answer(ct, s.db);
+        const uint64_t answer_ns = now_ns() - start;
+        std::string frame = wire::header(wire::kAnswer, 24 + 8 * ans.rows);
+        wire::put_be(frame, job->req_id, 8);
+        wire::put_be(frame, start - job->read_ns, 8);
+        wire::put_be(frame, answer_ns, 8);
+        put_elems(frame, ans);
+        release(ans);
+        if (job->conn->send(frame)) s.answered++;
+        job->conn->pending--;
+    }
+}
+
+void accept_connections(Server& s, int listen_fd) {
+    for (;;) {
+        pollfd fds[2] = {{listen_fd, POLLIN, 0}, {s.stop_fd, POLLIN, 0}};
+        if (poll(fds, 2, -1) < 0) {
+            if (errno == EINTR) continue;
+            throw std::runtime_error(std::string("poll failed: ") + std::strerror(errno));
+        }
+        if (fds[1].revents) return;
+        const int fd = accept(listen_fd, nullptr, nullptr);
+        if (fd < 0) {
+            if (errno == EMFILE || errno == ENFILE || errno == ENOBUFS || errno == ENOMEM) poll(&fds[1], 1, 100);
+            continue;
+        }
+        wire::no_delay(fd);
+        {
+            std::lock_guard<std::mutex> lock(s.readers_mu);
+            s.readers++;
+        }
+        try {
+            std::thread(reader, std::ref(s), std::make_shared<Connection>(fd)).detach();
+        } catch (const std::system_error& e) {
+            std::fprintf(stderr, "vsp-adapter: dropped a connection: %s\n", e.what());
+            std::lock_guard<std::mutex> lock(s.readers_mu);
+            s.readers--;
+        }
+    }
+}
+
+// The summary record: "mode": "serve", the INFO fields but scheme_params, then the final STATS.
+Json::Fields serve_summary(const Json::Fields& info, const Json::Fields& final_stats) {
+    Json::Fields f = {{"mode", Json::string("serve")}};
+    f.insert(f.end(), info.begin(), info.end());
+    f.insert(f.end(), final_stats.begin(), final_stats.end());
+    return f;
+}
+
+// SIGTERM and SIGINT stop the server: a sigwait thread writes to the stop pipe, the accept
+// loop and the readers see it and stop reading, the workers answer every query already read,
+// and the summary record goes to --out.
+int run_serve(const Options& o, const Layout& l, std::optional<Sink>& sink) {
+    const uint64_t start_ns = now_ns();
+    sigset_t stop_signals;
+    sigemptyset(&stop_signals);
+    sigaddset(&stop_signals, SIGTERM);
+    sigaddset(&stop_signals, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &stop_signals, nullptr);  // before any thread starts, so all inherit it
+    std::signal(SIGPIPE, SIG_IGN);
+
+    const ArmSpec& arm = *o.arm;
+    const auto pir = make_pir(arm, l);
+    const std::vector<uint8_t> bytes = database_bytes(o.db_bytes, o.seed);
+    const ServerDB db(*pir, arm, l, bytes, false);
+    const PublicSeeds seeds(o.seed);
+    const std::unique_ptr<ServerHint> hint = server_offline(*pir, arm, db, seeds);
+    const Json params = scheme_params(arm, o, l, pir.get());
+
+    const Json::Fields info = info_fields(o, bytes, seeds);
+    Json::Fields info_frame = info;
+    info_frame.emplace_back("scheme_params", params);
+
+    int stop_pipe[2];
+    if (pipe(stop_pipe)) throw std::runtime_error("pipe failed");
+    uint16_t port = 0;
+    const int listen_fd = wire::listen_on(*o.listen, port);
+    Server s{*pir, *db.D_packed, arm.name, wire::frame(wire::kInfo, Json::object(info_frame).text()), stop_pipe[0],
+             start_ns};
+
+    std::vector<std::thread> workers;
+    for (uint64_t i = 0; i < o.workers; i++) workers.emplace_back(worker, std::ref(s));
+    std::thread([stop_signals, fd = stop_pipe[1]] {
+        int sig = 0;
+        sigwait(&stop_signals, &sig);
+        if (write(fd, "x", 1) != 1) std::abort();
+    }).detach();
+
+    std::cout.flush();
+    std::fprintf(stderr, "vpir-serve ready %s\n", wire::Endpoint{o.listen->host, std::to_string(port)}.text().c_str());
+    accept_connections(s, listen_fd);
+    close(listen_fd);
+    {
+        std::unique_lock<std::mutex> lock(s.readers_mu);
+        s.readers_done.wait(lock, [&] { return s.readers == 0; });
+    }
+    s.queue.close();
+    for (std::thread& t : workers) t.join();
+    std::fprintf(stderr, "%s: served %llu queries\n", arm.name, (unsigned long long)s.answered.load());
+    if (sink) sink->write(Json::object(serve_summary(info, stats(s))).text());
+    return 0;
+}
+
+// ------------------------------------------------ the client
+
+// Upstream rejects an answer with assert, which aborts. The client turns that into exit 1 with
+// this note, so a rejected answer is a clear failure rather than a crash, and verification
+// runs in this process, timed as bench mode times an honest repetition's.
+char g_abort_note[256] = "upstream aborted";
+
+extern "C" void client_abort(int) {
+    static const char prefix[] = "vsp-adapter: ";
+    write(STDERR_FILENO, prefix, sizeof prefix - 1);
+    write(STDERR_FILENO, g_abort_note, std::strlen(g_abort_note));
+    write(STDERR_FILENO, "\n", 1);
+    _exit(1);
+}
+
+struct Frame {
+    uint8_t type;
+    std::string body;
+};
+
+Frame read_frame(int fd) {
+    uint8_t head[wire::kHeaderBytes];
+    if (wire::read_exact(fd, head, sizeof head, -1) != wire::Io::Ok)
+        throw std::runtime_error("the server closed the connection");
+    const uint64_t length = wire::get_be(head, 4);
+    if (length == 0 || length > wire::kMaxLength)
+        throw std::runtime_error("the server sent a frame of length " + std::to_string(length));
+    Frame f{head[4], std::string(length - 1, '\0')};
+    if (wire::read_exact(fd, f.body.data(), f.body.size(), -1) != wire::Io::Ok)
+        throw std::runtime_error("the server closed the connection inside a frame");
+    return f;
+}
+
+// INFO's fingerprint must match the client's own state.
+void check_info(const Frame& info, const Json::Fields& mine) {
+    const std::optional<JsonValue> got = info.type == wire::kInfo ? JsonValue::parse(info.body) : std::nullopt;
+    if (!got || got->kind != JsonValue::Object) throw std::runtime_error("the server's reply to HELLO is not an INFO object");
+    std::string diff;
+    for (const auto& [key, want] : mine) {
+        if (std::find(std::begin(kFingerprint), std::end(kFingerprint), key) == std::end(kFingerprint)) continue;
+        const JsonValue* v = got->get(key);
+        const std::string have = v ? v->scalar_text() : "missing";
+        if (have != want.text()) diff += " " + key + " is " + have + ", not " + want.text() + ";";
+    }
+    if (!diff.empty()) throw std::runtime_error("the server's INFO differs from the client's state:" + diff);
+}
+
+// The corpus a load generator replays (docs/serve_protocol.md, "Corpus"). It is written to
+// PATH.partial and renamed to PATH after the last verified answer, so PATH only ever holds a
+// complete corpus.
+class Corpus {
+public:
+    Corpus(const std::string& path, const Frame& info)
+        : path_(path), partial_(path + ".partial"), f_(std::fopen(partial_.c_str(), "wb")) {
+        if (!f_) throw std::runtime_error("cannot open " + partial_ + ": " + std::strerror(errno));
+        put(wire::frame(wire::kInfo, info.body));
+    }
+    ~Corpus() {
+        if (f_) std::fclose(f_);
+    }
+    Corpus(const Corpus&) = delete;
+
+    void add(uint64_t req_id, const std::string& query_frame, const std::string& answer) {
+        put(query_frame);
+        std::string expect;
+        wire::put_be(expect, req_id, 8);
+        wire::put_be(expect, 0, 1);  // server_id
+        wire::put_be(expect, answer.size(), 4);
+        put(wire::frame(wire::kExpect, expect + sha256(answer.data(), answer.size())));
+    }
+
+    void finish() {
+        const bool closed = std::fclose(f_) == 0;
+        f_ = nullptr;
+        if (!closed || std::rename(partial_.c_str(), path_.c_str()))
+            throw std::runtime_error("cannot write " + path_ + ": " + std::strerror(errno));
+    }
+
+private:
+    void put(const std::string& bytes) {
+        if (std::fwrite(bytes.data(), 1, bytes.size(), f_) != bytes.size())
+            throw std::runtime_error("write to " + partial_ + " failed");
+    }
+    std::string path_, partial_;
+    FILE* f_;
+};
+
+// A real client of one server. It rebuilds the offline state from --seed, untimed (S1 and S2
+// run the whole preprocessing exchange against a local server object over the same database),
+// then sends Q queries one at a time and verifies and decodes each answer. Any rejected or
+// wrongly decoded answer ends the run with exit 1.
+int run_client(const Options& o, const Layout& l, Sink& sink) {
+    std::signal(SIGABRT, client_abort);
+    std::signal(SIGPIPE, SIG_IGN);
+    const ArmSpec& arm = *o.arm;
+    const auto pir = make_pir(arm, l);
+    const std::vector<uint8_t> bytes = database_bytes(o.db_bytes, o.seed);
+    const ServerDB db(*pir, arm, l, bytes, false);
+    const PublicSeeds seeds(o.seed);
+    std::snprintf(g_abort_note, sizeof g_abort_note, "upstream aborted in the client's offline phase");
+    const std::unique_ptr<ClientState> state = run_offline(*pir, arm, db, std::nullopt, &seeds).state;
+    std::snprintf(g_abort_note, sizeof g_abort_note, "upstream aborted");
+    const Json params = scheme_params(arm, o, l, pir.get()), sizes = analytical(arm, pir->dbParams);
+    const WireBits w = wire_bits(*pir);
+
+    const int fd = wire::connect_to(*o.connect);
+    if (!wire::write_all(fd, wire::frame(wire::kHello, Json::object({{"protocol", Json::integer(1)}}).text())))
+        throw std::runtime_error("the server closed the connection");
+    const Frame info = read_frame(fd);
+    check_info(info, info_fields(o, bytes, seeds));
+    std::optional<Corpus> corpus;
+    if (!o.corpus_out.empty()) corpus.emplace(o.corpus_out, info);
+
+    Stream index_stream(o.seed, kIndex);
+    for (uint64_t q = 0; q < o.reps; q++) {
+        const uint64_t req_id = q + 1;  // ERROR reserves req_id 0 for the connection
+        const uint64_t record = index_stream.below(l.records);
+        QueryResult res;
+        std::pair<Matrix, Matrix> ct_sk;
+        timed(res.query_gen, [&] { ct_sk = pir->Query(state->A, l.entry(record, 0)); });
+        Matrix& ct = ct_sk.first;
+        Matrix& sk = ct_sk.second;
+        res.up_bytes = wire_bytes(ct, w.q);
+        std::string query = wire::header(wire::kQuery, 8 + 8 * ct.rows);
+        wire::put_be(query, req_id, 8);
+        put_elems(query, ct);
+
+        Frame reply{};
+        timed(res.rtt, [&] {
+            if (!wire::write_all(fd, query)) throw std::runtime_error("the server closed the connection");
+            reply = read_frame(fd);
+        });
+        const auto* p = reinterpret_cast<const uint8_t*>(reply.body.data());
+        if (reply.type == wire::kError && reply.body.size() >= 8)
+            throw std::runtime_error("the server refused req_id " + std::to_string(wire::get_be(p, 8)) + ": " +
+                                     reply.body.substr(8));
+        if (reply.type != wire::kAnswer || reply.body.size() != 24 + 8 * pir->ell || wire::get_be(p, 8) != req_id)
+            throw std::runtime_error("the reply to req_id " + std::to_string(req_id) + " is not its " +
+                                     std::to_string(8 * pir->ell) + "-byte ANSWER");
+        res.answer.wall = wire::get_be(p + 16, 8) * 1e-9;
+        Matrix ans(pir->ell, 1);
+        get_elems(p + 24, ans);
+        res.down_bytes = wire_bytes(ans, w.q);
+
+        if (arm.verifiable()) {
+            std::snprintf(g_abort_note, sizeof g_abort_note,
+                          "the client rejected the answer to req_id %llu: PreVerify failed", (unsigned long long)req_id);
+            timed(res.verify.emplace(), [&] { pir->PreVerify(ct, ans, state->Z, *state->C); });
+            std::snprintf(g_abort_note, sizeof g_abort_note, "upstream aborted");
+            res.detected = false;
+        }
+        std::vector<uint64_t> got;
+        timed(res.recover.emplace(), [&] { got = decode_record(*pir, l, state->H, ans, sk, record); });
+        res.correct = got == truth_of(l, bytes, record);
+
+        Record r{o, params};
+        r.phase = Phase::Online;
+        r.rep = q;
+        r.recovery = Recovery{*res.correct ? Outcome::Accepted : Outcome::SilentWrong};
+        r.metrics = metrics(Phase::Online, nullptr, &res, &*r.recovery, Mode::Client);
+        r.analytical = sizes;
+        r.correct = res.correct;
+        r.detected = res.detected;
+        sink.write(r);
+        if (!*res.correct)
+            throw std::runtime_error("the answer to req_id " + std::to_string(req_id) + " decoded to the wrong record");
+        if (corpus) corpus->add(req_id, query, reply.body.substr(24));
+        release(ct);
+        release(sk);
+        release(ans);
+    }
+    if (corpus) corpus->finish();
+    close(fd);
+    std::fprintf(stderr, "%s: %llu client queries written\n", arm.name, (unsigned long long)o.reps);
+    return 0;
+}
+
+// Parameter selection runs in a child, as in every mode. Unsupported parameters are a result:
+// bench and client mode write their records with status unsupported_params, and serve mode
+// writes its summary record so, without listening.
+int run(const Options& o) {
+    std::optional<Sink> sink;
+    if (!o.out.empty()) sink.emplace(o.out);
+    const ArmSpec& arm = *o.arm;
+    auto [layout, why] = select_params(arm, o.db_bytes, o.record_bytes);
+    if (!layout) {
+        // Upstream prints progress before its message, so keep the last lines: the message and the assert.
+        size_t cut = why.size();
+        for (int lines = 0; lines < 3 && cut != std::string::npos && cut > 0; lines++) cut = why.rfind('\n', cut - 1);
+        if (cut != std::string::npos && cut < why.size()) why = why.substr(cut + 1);
+        std::fprintf(stderr, "%s: unsupported parameters: %s\n", arm.name, why.c_str());
+        if (o.mode == Mode::Serve) {
+            Json::Fields f = serve_summary(info_fields(o, database_bytes(o.db_bytes, o.seed), PublicSeeds(o.seed)),
+                                           stats(now_ns(), 0, 0));
+            f.emplace_back("status", Json::string("unsupported_params"));
+            f.emplace_back("error", Json::string(why));
+            if (sink) sink->write(Json::object(f).text());
+        } else {
+            write_unsupported(o, why, *sink);
+        }
+        return 0;
+    }
+    switch (o.mode) {
+        case Mode::Serve: return run_serve(o, *layout, sink);
+        case Mode::Client: return run_client(o, *layout, *sink);
+        case Mode::Bench: break;
+    }
+    return run_bench(o, *layout, *sink);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1262,6 +2018,7 @@ int main(int argc, char** argv) {
     try {
         return run(o);
     } catch (const std::exception& e) {
+        std::cout.flush();  // upstream's buffered progress first, so the reason is the last line
         std::fprintf(stderr, "vsp-adapter: %s\n", e.what());
         return 1;
     }

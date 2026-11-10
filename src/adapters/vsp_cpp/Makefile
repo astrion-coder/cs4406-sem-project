@@ -6,6 +6,9 @@ SRC_DIR := $(ROOT)/src/adapters/vsp_cpp
 LLVM_PREFIX ?= $(shell brew --prefix llvm)
 OPENSSL_PREFIX ?= $(shell brew --prefix openssl@3)
 UPSTREAM_SHA := $(shell git -C $(VSP) rev-parse HEAD)
+# Extra compile and link flags, such as EXTRA_FLAGS="-fsanitize=thread -g" for the race check
+# in docs/serve_protocol.md ("Threads"). Build such a binary to its own OUT.
+EXTRA_FLAGS ?=
 
 CXX := $(LLVM_PREFIX)/bin/clang++
 # Same headers and link line as upstream's demo binaries, so the adapter shares the library's
@@ -23,8 +26,8 @@ all: $(OUT)
 # The dylib's install name is the relative path bin/lib/libverisimplepir.dylib, which dyld
 # resolves against the working directory. Rewriting this binary's reference to @rpath makes
 # it load through the rpath above from any directory, with no DYLD_LIBRARY_PATH.
-$(OUT): $(SRC_DIR)/vsp_adapter.cpp $(SRC_DIR)/json.h $(VSP)/bin/lib/libverisimplepir.dylib $(OUT).sha
-	$(CXX) $(CXXFLAGS) -o $@ $(SRC_DIR)/vsp_adapter.cpp $(LDFLAGS)
+$(OUT): $(SRC_DIR)/vsp_adapter.cpp $(SRC_DIR)/json.h $(SRC_DIR)/wire.h $(VSP)/bin/lib/libverisimplepir.dylib $(OUT).sha
+	$(CXX) $(CXXFLAGS) $(EXTRA_FLAGS) -o $@ $(SRC_DIR)/vsp_adapter.cpp $(LDFLAGS) $(EXTRA_FLAGS)
 	install_name_tool -change bin/lib/libverisimplepir.dylib @rpath/libverisimplepir.dylib $@
 
 # Touched only when the submodule moves, so the embedded upstream_sha is never stale.

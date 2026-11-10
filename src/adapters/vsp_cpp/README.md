@@ -12,6 +12,8 @@ This needs the already-built `third_party/verisimplepir/bin/lib/libverisimplepir
 
 The dylib's install name is the relative path `bin/lib/libverisimplepir.dylib`, which dyld resolves against the working directory. The build rewrites this one reference in the adapter binary to `@rpath/libverisimplepir.dylib`, with the rpath `@executable_path/../../third_party/verisimplepir/bin/lib`. The binary then runs from any directory with no `DYLD_LIBRARY_PATH`. `third_party/` is not touched. `make -C src/adapters/vsp_cpp OUT=<path>` builds elsewhere, and the rpath resolves when `<path>` is two levels below the repository root, as `build/adapters/vsp-adapter` is.
 
+`EXTRA_FLAGS` adds compile and link flags. The race check in "Serve and client mode" builds with `EXTRA_FLAGS="-fsanitize=thread -g"` into its own `OUT`.
+
 ## Arms
 
 | Arm | `VeriSimplePIR` flags | Calls |
@@ -138,7 +140,48 @@ Upstream reports a bad parameter set or a failed check with `assert(false)`, whi
 3. Every fault-injected verification (`verify_isolated`), which times itself (see "What each timer covers").
 4. Every `re_preprocess` attempt, for the same leak as item 2 (see "Recovery").
 
+## Serve and client mode
+
+`--mode serve` and `--mode client` follow `docs/serve_protocol.md`. This section covers what that document leaves to each adapter. The three arms have one server each, so `--server-id` must be 0 and `--connect` takes one address.
+
+### Encoding
+
+A query is `ct`'s `m` elements and an answer is `ans`'s `ell` elements. Each element is a 64-bit word in big-endian order, the byte order the protocol uses for every integer. These are the bench-mode encodings, so a query is `up_bytes = 8m` bytes and an answer is `down_bytes = 8 ell` bytes. The server checks that a `QUERY` body is `8 + 8m` bytes. Any other length gets `ERROR` with the query's `req_id`, and the library is not called.
+
+### Public matrices
+
+Bench mode draws `A`, and `A_2` for S1 and S2, as upstream's `Init` and `PreprocInit` do: `random` seeds a fresh PRNG from system randomness (`mat.cpp:41-44`). Serve and client mode draw the same matrices with upstream's `pseudorandom` (`mat.cpp:51-54`), which runs the same `randomInner` loop from a given seed. The seeds for `A`, `A_2`'s `q` limb and `A_2`'s `kappa` limb are taken in turn from an AES-CTR stream keyed by `toBlock(4, seed)`. `INFO`'s `public_seed` is that key in hex, 16 digits of 4 and then 16 of `--seed`. A client therefore holds the server's `A` and hint.
+
+### Server
+
+At startup the server builds the database, `D`, `D^T` (S1 and S2) and the packed `D`. Then it runs its half of the offline phase, the calls bench mode times as `public_params_s` and `server_preproc_s`: `A`, `GenerateHint`, and for S1 and S2 `A_2`, `PreprocGenerateHint` and `HashAandH`. The results stay in memory for the server's lifetime, as a server keeps the hint it hands to new clients. The protocol never sends them.
+
+One reader thread per connection reads frames. It answers `HELLO` and `STATS_REQ` itself and puts each `QUERY` on one FIFO of at most 4096 jobs, which `--workers` worker threads drain. A worker calls `Answer` on the shared packed database without a lock (`docs/serve_protocol.md`, "Threads"). `answer_ns` is `CLOCK_MONOTONIC` around `Answer`, the clock bench mode uses for `server_answer_s`. On macOS that clock counts whole microseconds. `queue_ns` runs from the last byte of the query read to the worker's start. A worker frees the answer once its frame is built, and the query's memory goes with the job.
+
+A `HELLO` body longer than 4096 bytes, or one without `"protocol": 1`, gets `ERROR` with request id 0, and the server closes the connection. A malformed frame gets the same treatment. After that `ERROR` the server sends FIN, then reads and drops input until the client closes, for at most 2 s. A socket closed with unread input resets the connection, and the reset discards whatever the client has not read yet, the `ERROR` included.
+
+In `STATS`, `answered` counts `ANSWER` frames written in full, and `queued` counts queries read and not yet started by a worker, including one that a reader holds while the queue is full.
+
+SIGTERM and SIGINT are blocked in every thread. One thread waits for them with `sigwait` and then writes to a pipe. The accept loop and the readers poll that pipe, so they stop reading queries. Each reader then drops what its client still sends until the workers have answered every query it had read, sends FIN, and drops input until the client closes, for at most 2 s, for the same reason as after an `ERROR`. A shutdown with idle clients connected therefore takes about 2 s. The server then appends the summary record that `docs/serve_protocol.md` defines to `--out` and exits 0.
+
+### Client
+
+The client rebuilds its offline state from `--seed`, untimed. S1 and S2 run `run_offline`, the whole preprocessing exchange, against a local server object over the same database. The client then sends `HELLO`, compares `arm`, `db_bytes`, `record_bytes`, `seed`, `db_sha256` and `public_seed` in `INFO` with its own, and exits 1 on any difference. It sends `--session-queries` queries one at a time, with `req_id` 1, 2, and so on, and the corpus uses the same ids. A record's `rep` stays 0-based. Record indices come from the same seeded stream as bench mode's.
+
+S1 and S2 verify each answer with `PreVerify` in the client process, timed as in an honest bench repetition, so honest answers never fork. Upstream rejects an answer with `assert`. The client's `SIGABRT` handler prints which `req_id` it rejected and exits 1. An answer that decodes to the wrong record is written as a record with `correct=false`, and then the client exits 1.
+
+Each record is a bench-shaped online record with `"mode": "client"` and the metric `rtt_s`, a one-entry list, with its sibling `rtt_cpu_s`, the client's CPU time over the round trip. `server_answer_s` is the server's `answer_ns`. `server_answer_cpu_s` is `[null]`, because the `ANSWER` frame carries no CPU time. `process_peak_rss_bytes` is the client process's peak, which includes the local server object and offline phase that rebuilt the client's state.
+
+`--corpus-out PATH` writes the corpus to `PATH.partial` and renames it to `PATH` after the last answer is verified. A run that exits 1 leaves no file at `PATH`.
+
+In serve and client output, `scheme_params.parallelism` is `inter_query` (spec §9). Parameters that upstream rejects are a result, as in bench mode. The server writes its summary record, with `answered` 0 and two more fields, `"status": "unsupported_params"` and upstream's message as `error`, and exits 0 without listening. The client writes one such record per query and exits 0 without connecting.
+
+### Race check
+
+The answer path is shared across threads only through the packed database, which `Answer` reads. To check the adapter's own threads, build with `EXTRA_FLAGS="-fsanitize=thread -g"` and run the server at 1 MiB with `--workers 6` under 16 replaying clients. The library is not instrumented. ThreadSanitizer therefore sees the adapter's queue, connection writes, counters and the bytes it hands to and takes from `Answer`. It does not see memory that only the library touches inside `Answer`.
+
 ## Known limits
 
 - **Padding at small databases with long records.** See "Sizes and data". `padding_factor` in `scheme_params` says how much larger the library's database is than `db_bytes`.
+- **A server writes answers synchronously.** A worker writes each `ANSWER` to its socket itself, holding that connection's lock. A client that sends queries and never reads the answers fills its socket buffer, and then every worker that answers it waits on that socket, which stalls the server for all clients until the client reads or disconnects.
 - **Online repetitions leak a little.** They run in the parent, as the contract has them, and so do `switch_replica` attempts. The library's temporaries in `Query`, `Answer`, `decrypt` and `PreVerify` are never freed, and peak RSS grows by about 44 KiB per S1 online repetition at 1 MiB. These temporaries are vectors of length `m` or `ell`, so the growth scales with the square root of the database size.
