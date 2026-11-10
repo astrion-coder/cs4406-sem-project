@@ -35,7 +35,14 @@ done
 check "VeriSimplePIR pir_test is built" test -x third_party/verisimplepir/bin/demo/test/pir_test
 check "libverisimplepir.dylib is arm64" sh -c 'file third_party/verisimplepir/bin/lib/libverisimplepir.dylib | grep -q arm64'
 
-# The bracketed dots keep pgrep from matching this check's own command line.
+for a in simplepir-adapter apir-adapter vsp-adapter; do
+	check "build/adapters/$a is built" test -x "build/adapters/$a"
+done
+
+# The bracketed characters keep pgrep from matching this check's own command line.
 check "no other test run is running" sh -c '! pgrep -f "cs4406_sem_project[.]harness[.]upstream_tests"'
+check "no conformance or recovery run is running" sh -c '! pgrep -f "cs4406_sem_project[.]harness[.]conformance"'
+check "no adapter test is running" sh -c '! pgrep -f "tests/test_(adapters|recovery|serve)[.]py"'
+check "no notebook is running" sh -c '! pgrep -f "nbconvert[ ].*--execute"'
 
 exit $fail

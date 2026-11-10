@@ -1,15 +1,15 @@
 ---
 name: verify-vpir-bench
-description: Drive and prove the verifiable-PIR benchmark's command-line pipeline on this Mac (make patch, make build, make test, make sysinfo), recording exit codes, logs and before/after repo state as evidence. Use before claiming that a change to the Makefile, patches/, the upstream test runner, or sysinfo works, and to re-check that every upstream suite still passes (gate G0).
+description: Drive and prove the verifiable-PIR benchmark's command-line pipeline on this Mac (make patch, build, test, sysinfo, adapters, conformance, recovery; the adapters' bench, serve and client modes; the notebooks behind README claims), recording exit codes, logs and before/after repo state as evidence. Use before claiming that a change to the Makefile, patches/, the upstream test runner, sysinfo, an adapter, the adapter test suites or serve mode works, and to re-check gates G0, G1 and G6.
 ---
 
 # Verify the vpir benchmark
 
-The project is a command-line build-and-measure pipeline, not a server. People drive it through `make` targets at the repo root and standalone tools. It runs natively on an Apple M1 Pro (darwin/arm64). Nothing listens on a port.
+The project is a command-line build-and-measure pipeline. People drive it through `make` targets at the repo root, the adapter binaries and the notebooks. It runs natively on an Apple M1 Pro (darwin/arm64). Only serve mode listens on a port, always `127.0.0.1:0`, and only for the life of one step.
 
-- **Primary entry.** `make setup | patch | build | test | sysinfo` from the repo root.
-- **Secondary entries.** `uv run python -m cs4406_sem_project.harness.upstream_tests`, `uv run python docs/tools/md2pdf.py`, and the notebooks in `notebooks/`.
-- **Not built yet.** The measurement adapters for the eight benchmark configurations (spec phase P1). Add a feature file per adapter when they land.
+- **Primary entry.** `make setup | patch | build | test | sysinfo | adapters | conformance | recovery` from the repo root.
+- **Secondary entries.** The adapter binaries in `build/adapters/` (bench, `--mode serve` and `--mode client`), `uv run pytest tests/test_*.py`, `uv run python -m cs4406_sem_project.harness.upstream_tests` and `...harness.conformance`, `uv run python docs/tools/md2pdf.py`, and the notebooks in `notebooks/`.
+- **Not built yet.** The grid runner (SG's phase P2), the load generator and the analysis. Add a feature file for each when it lands.
 
 The recipes live in `features/`. Read `features/README.md` before driving anything.
 
@@ -23,7 +23,7 @@ From a fresh clone, run these once. They need the network, and the installs are 
 brew install go llvm openssl@3 iperf3
 uv sync
 make setup     # clones the three pinned submodules into third_party/, go mod download, uv sync
-make build     # make patch, then builds VeriSimplePIR, simplepir and apir-code
+make build     # make patch, builds VeriSimplePIR, simplepir and apir-code, then make adapters
 ```
 
 On an existing checkout, run `make build` alone. Ready means `doctor.sh` exits 0. A passing `make build` is not enough, because doctor also checks the pins and that every patch is applied.
@@ -42,9 +42,10 @@ Read-only. It prints one `ok` or `FAIL` line per check and exits non-zero on any
 - Each submodule's `HEAD` equals its pin in the Makefile's `PINS` list.
 - Every `patches/<submodule>/*.patch` is applied.
 - VeriSimplePIR's `pir_test` exists and `libverisimplepir.dylib` is arm64.
-- No other `upstream_tests` run is running.
+- `build/adapters/` holds the three adapter binaries.
+- No other `upstream_tests`, conformance or recovery run, adapter test, or notebook run is running.
 
-Run it first, and again whenever a step surprises you. Do not drive while it reports another run. Two runs share the submodule working trees and build outputs, and `make test` names its log directory to the second, so concurrent runs corrupt each other. There is no way to isolate them on one checkout.
+Run it first, and again whenever a step surprises you. Do not drive while it reports another run. Two runs share the submodule working trees and build outputs (`make conformance` and `make recovery` rebuild `build/adapters/`), `make test` names its log directory to the second, and timing runs need the Mac to themselves, so concurrent runs corrupt each other. There is no way to isolate them on one checkout.
 
 ## Drive
 
@@ -79,14 +80,15 @@ Proof standards:
 bash .claude/skills/verify-vpir-bench/scripts/cleanup.sh
 ```
 
-It removes any `patches/*/99-verify-*.patch` scaffolding and checks every submodule. A submodule whose patches neither apply nor reverse gets its edits saved first: tracked-file changes to `$VERIFY_RUN/<submodule>.restored.diff`, and untracked files, including those a patch adds, to `$VERIFY_RUN/<submodule>.restored-untracked.tgz`. Then it is reset to its pin. Finally it runs `make patch`, so the checkout ends at pin plus every patch. It never touches `logs/`. No recipe starts a background process. If you start one yourself, kill that PID, never a process name. Run `doctor.sh` after cleanup and require exit 0.
+It removes any `patches/*/99-verify-*.patch` scaffolding and checks every submodule. A submodule whose patches neither apply nor reverse gets its edits saved first: tracked-file changes to `$VERIFY_RUN/<submodule>.restored.diff`, and untracked files, including those a patch adds, to `$VERIFY_RUN/<submodule>.restored-untracked.tgz`. Then it is reset to its pin. Finally it runs `make patch`, so the checkout ends at pin plus every patch. It never touches `logs/`. No recipe leaves a background process behind: `serve_session.sh` and the serve judge start servers and stop the ones they started. If you start one yourself, kill that PID, never a process name, because the adapters share binary names with other runs. Run `doctor.sh` after cleanup and require exit 0.
 
 ## Helpers
 
-All three live in `.claude/skills/verify-vpir-bench/scripts/` and run from any directory inside the repo.
+All four live in `.claude/skills/verify-vpir-bench/scripts/` and run from any directory inside the repo.
 
 | Script | Use |
 |---|---|
 | `doctor.sh` | `bash $S/doctor.sh`. A read-only readiness check, exiting non-zero on any `FAIL`. |
 | `step.sh` | `bash $S/step.sh [--expect N] <step-name> <command> [args...]`. Runs one step and logs it to `$VERIFY_RUN`. |
 | `cleanup.sh` | `bash $S/cleanup.sh`. Restores pin plus patches and keeps `logs/`. |
+| `serve_session.sh` | `bash $S/serve_session.sh ARM [QUERIES]`. Starts the arm's server(s), runs one client session that writes records and a corpus, and stops the servers with SIGTERM. Writes `$VERIFY_RUN/serve-<ARM>/`. |

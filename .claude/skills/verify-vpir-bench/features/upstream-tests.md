@@ -26,14 +26,14 @@ Preconditions:
 
 - **Subset.** Run `bash $S/step.sh tests-subset make test ONLY="verisimplepir apir-code"`. Exit 0. The output has exactly two suite lines, `apir-code: passed` and `verisimplepir: passed`, and both name the same new `logs/p0/<ts>/` directory.
 - **Fresh Go run.** Run `bash $S/step.sh tests-fresh bash -c '! grep -q "(cached)" "$(ls -td logs/p0/*/ | head -1)apir-code.log"'`. Exit 0, meaning the apir-code log has no `(cached)` result.
-- **Unknown suite.** Run `bash $S/step.sh --expect 2 tests-unknown make test ONLY=nope`. Make exits 2. The output contains `error: unknown suite(s) ['nope']` followed by the three known names. Compare `ls logs/p0` before and after: no new directory.
+- **Unknown suite.** Run `bash $S/step.sh --expect 2 tests-unknown make test ONLY=nope`. Make exits 2. The output contains `error: unknown suite(s) ['nope']; known: ['apir-code', 'simplepir', 'verisimplepir']`, with the names sorted, not in run order. Compare `ls logs/p0` before and after: no new directory.
 - **Failure.** Run `bash $S/step.sh --expect 2 tests-failure make test ONLY=simplepir CC=/nonexistent/clang`. Make exits 2. The output has a `simplepir: failed (exit 1, ...)` line, and that suite's log names the missing C compiler.
 - **All suites.** Run `bash $S/step.sh tests-all make test`. Exit 0. The output has three suite lines, each `passed (exit 0, ...)`, in the order listed above. On the M1 Pro the suites took 109 s, 71 s and 4 s (about 3 minutes in total) on 2026-11-09, mostly simplepir and apir-code.
 - **Proof.** Run `cp "$(ls -td logs/p0/*/ | head -1)SUMMARY.md" "$VERIFY_RUN/tests-all.SUMMARY.md"`. The copy has three rows, each with status `passed` and exit code `0`.
 
 ## Gotchas
 
-- `make test` does not build. After changing a patch or upstream code, run `make build` first, or the VeriSimplePIR suite runs a stale `pir_test`.
+- `make test` does not build. After changing a patch or upstream code, run `make build` first, or the VeriSimplePIR suite runs a stale `pir_test`. `make build` also builds the adapters now, which adds a few seconds when nothing changed.
 - The apir-code suite runs with `-skip ^TestReal`. Those tests read the SKS PGP key dump in `third_party/apir-code/data/sks/`, which `make setup` does not download. A pass does not cover them.
 - `logs/p0/<ts>/` is named to the second. Two runs started in the same second share a directory.
 - `not_built` appears when a suite's directory or entry point is missing. That needs a fresh clone before `make setup`, so these recipes do not drive it. `tests/test_upstream_tests.py` covers it.

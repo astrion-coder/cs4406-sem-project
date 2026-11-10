@@ -31,5 +31,5 @@ Preconditions:
 
 - `env/` is not gitignored. A verification run that creates it leaves untracked files behind. Do not commit them from a verification run.
 - Executing the notebook in place rewrites its committed outputs, including the timestamp and load average. Always pass `--output-dir "$VERIFY_RUN"`.
-- simplepir has no patches, so its `dirty` should be `False`. `True` means someone edited it by hand.
+- simplepir has no patches, so its `dirty` should be `False`. `True` means someone edited it by hand or left untracked files in it. `dirty` is `None` when `git status` itself fails in that submodule.
 - `power.source` comes from `pmset`. On battery it reads `Battery Power`. The spec requires AC power for measurement runs, and sysinfo records the power source without refusing to run.
