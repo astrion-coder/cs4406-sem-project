@@ -125,3 +125,24 @@ def load_netem(netem_dir: Path, reference_platform: str) -> pd.DataFrame:
         if not df.empty:
             parts.append(df.assign(profile=d.name))
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+
+
+LOADGEN_COLUMNS = ("arm", "db_bytes", "workers", "loop", "clients", "offered_load_qps", "run", "throughput_qps",
+                   "lat_p50_s", "lat_p95_s", "lat_p99_s", "server_cpu_util", "status")
+LOADGEN_NOT_POINTS = ("corpus", "servers", "rejected")
+
+
+def loadgen_frame(points: dict[tuple[str, str], list[dict]]) -> pd.DataFrame:
+    """One row per ok or saturated load-generator run, keyed by (cell_id, point name) as loadgen.py lays them
+    out. A saturated run is still a measured point on the curve; an error run measured nothing."""
+    df = pd.DataFrame([
+        {"cell_id": cell, "point": point, "experiment": point.split("_")[0],
+         **{k: r[k] for k in LOADGEN_COLUMNS}, "record_bytes": r["record_bytes"] or 0}
+        for (cell, point), rows in points.items() for r in rows if r["status"] in ("ok", "saturated")])
+    return df if df.empty else df.sort_values(["cell_id", "point", "run"]).reset_index(drop=True)
+
+
+def load_loadgen(loadgen_dir: Path, reference_platform: str) -> pd.DataFrame:
+    """harness/loadgen.py's rows under results/raw/<run_id>/loadgen/<cell_id>/<point>.jsonl."""
+    paths = sorted(p for p in loadgen_dir.glob("*/*.jsonl") if p.parent.name not in LOADGEN_NOT_POINTS)
+    return loadgen_frame({(p.parent.name, p.stem): read_rows([p], reference_platform) for p in paths})

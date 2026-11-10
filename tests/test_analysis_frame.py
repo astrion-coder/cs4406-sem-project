@@ -103,3 +103,42 @@ def test_load_session_reads_the_comparison_and_checks_the_rows(tmp_path):
     assert table.computed.item() == 2.0 and table.measured.isna().all()
     with pytest.raises(frame.RefusedRows, match="reference platform"):
         frame.load_session(tmp_path / "session", "arm64-darwin-Apple M1 Pro")
+
+
+def _loadgen_points():
+    from cs4406_sem_project.harness import loadgen
+
+    load = loadgen.yaml.safe_load(loadgen.LOAD_PATH.read_text())
+    targets = [t for t in loadgen.targets(grid.load(), "focus") if t.cell_id in ("S1_1GiB_1KiB", "S3_1GiB_1bit")]
+    return synthetic.loadgen_points(targets, load)
+
+
+def _write_loadgen(d, points):
+    for (cell, point), rows in points.items():
+        (d / cell).mkdir(parents=True, exist_ok=True)
+        (d / cell / f"{point}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+
+def test_synthetic_loadgen_rows_validate():
+    rows = [r for rs in _loadgen_points().values() for r in rs]
+    assert [p for r in rows for p in validate.check_row(r, reference_platform=synthetic.PLATFORM)] == []
+
+
+def test_load_loadgen_keeps_the_cell_and_point_from_the_path_and_drops_errors(tmp_path):
+    points = _loadgen_points()
+    points[("S1_1GiB_1KiB", "closed_w6_c1")][0] |= {"status": "error", "error": "boom"}
+    _write_loadgen(tmp_path, points)
+    (tmp_path / "corpus").mkdir()
+    (tmp_path / "corpus" / "S1_1GiB_1KiB.client.jsonl").write_text("not a loadgen row\n")
+    df = frame.load_loadgen(tmp_path, synthetic.PLATFORM)
+    assert len(df) == sum(len(rs) for rs in points.values()) - 1
+    assert set(df.experiment) == {"closed", "open", "multicore"}
+    c1 = df[(df.cell_id == "S1_1GiB_1KiB") & (df.point == "closed_w6_c1")]
+    assert list(c1.run) == [1, 2] and (c1.clients == 1).all()
+    assert (df[df.arm == "S3"].record_bytes == 0).all() and "saturated" in set(df.status)
+
+
+def test_load_loadgen_refuses_other_platforms(tmp_path):
+    _write_loadgen(tmp_path, _loadgen_points())
+    with pytest.raises(frame.RefusedRows, match="reference platform"):
+        frame.load_loadgen(tmp_path, "arm64-darwin-Apple M1 Pro")
