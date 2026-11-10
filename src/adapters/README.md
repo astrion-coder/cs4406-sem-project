@@ -170,6 +170,6 @@ Bytes measure what a client and server would exchange over a network. When upstr
 make build && make conformance
 ```
 
-`make conformance` (`harness/conformance.py`) runs the test in parallel partitions, one per slow S4 run, and refuses to start unless the partitions cover every collected test exactly once. It writes each partition's log and a `SUMMARY.md` to `logs/p1/<UTC time>/`. `notebooks/02_g1_conformance.ipynb` runs it, and the README's G1 row cites that cell. `uv run pytest tests/test_adapters.py -k ...` still runs any subset directly.
+`make conformance` (`harness/conformance.py`) runs the test in parallel partitions, one per slow S4 run, and refuses to start unless the partitions cover every collected test exactly once. It writes each partition's log and a `SUMMARY.md` to `logs/p1/<UTC time>/`. `notebooks/02_g1_conformance.ipynb` runs it, and the README's G1 row cites that cell. `uv run pytest tests/test_adapters.py -k ...` still runs any subset directly. `make recovery` runs `tests/test_recovery.py` (the "Recovery" rules) the same way, in five partitions, into `logs/p7/`, and `notebooks/03_p7_recovery.ipynb` runs it.
 
 Both this test and `tests/test_recovery.py` start each adapter through `harness/memcap.py`. It kills the adapter and its children once their combined memory footprint (resident plus compressed, from `proc_pid_rusage`) passes `VPIR_ADAPTER_MEM_CAP_GIB` (default 2 GiB), and the test fails with that message.
