@@ -17,7 +17,7 @@ Each adapter is a command-line program that drives one upstream library and writ
 ```
 <adapter> --arm ARM --db-bytes N --record-bytes N --phase offline|online|all
           --reps N --warmup N --seed N --fault KIND [--fault-prob F]
-          [--recovery abort] --out PATH.jsonl
+          [--recovery POLICY] [--replicas-cheat] --out PATH.jsonl
 ```
 
 - `--arm` must be one the adapter serves. Any other value is a usage error.
@@ -28,7 +28,8 @@ Each adapter is a command-line program that drives one upstream library and writ
 - `--phase all` records both phases.
 - `--seed` determines the database and the query indices. The same seed gives the same database and the same indices on every run. Database generation is never timed.
 - `--fault` is one of the kinds in the fault table below. `--fault-prob` (default 1.0 when `--fault` is not `none`) is the chance that each repetition is faulted, drawn from the seeded generator.
-- `--recovery` is `abort` until P7 adds `switch_replica` and `re_preprocess`. `retry_same` is never allowed (decision 12).
+- `--recovery` is `abort`, `switch_replica` or `re_preprocess` (see "Recovery"). `retry_same` is never allowed (decision 12).
+- `--replicas-cheat` makes every replica that `switch_replica` turns to faulty in the same way as the first server. Without it, replicas are honest (spec §6.1).
 - Bench mode is single-threaded. Go adapters call `runtime.GOMAXPROCS(1)`.
 
 Exit codes:
@@ -108,7 +109,9 @@ Faults are injected only here, in the adapter, by changing the serialised server
 | `flip_answer_bit` | online | all | flips one random bit, chosen among the answer bits that the honest client's output for the queried record depends on (see below) |
 | `wrong_record` | online | all | replaces the answer with the honest answer to a different index |
 | `flip_hint_bit` | offline and online | S0-go, S0-cpp, S1, S2 | flips one random bit of the hint the client downloads, chosen among the bits the queried record's decoding depends on. In an offline record, S1 and S2 report whether preprocessing verification rejected it. In an online record, the corrupted hint is used for that repetition's reconstruction, which is where a baseline shows the effect. |
-| `stale_record`, `bad_proof`, `drop_server` | | | P7. Usage error (exit 2) until then. |
+| `stale_record` | online | all | answers from a stale database, the current one with every bit of every record flipped, so every record differs, including one-bit records. The client's offline state still matches the current database. The adapter builds the stale server once, untimed. |
+| `drop_server` | online | all | withholds the answer of one server, chosen from the fault stream. The client reconstructs nothing from that query. |
+| `bad_proof` | offline | S1, S2 | flips one bit of the preprocessing proof (`PreprocProve`'s output), below the proof's norm bound, so `PreprocVerify` sees a changed value. Spec §5.1 lists it for S2. S1 makes the same preprocessing calls (decision 4), so it applies there too. |
 
 A uniformly random bit usually cannot change the answer. It may fall outside the rows that hold the record, or below the rounding threshold of a lattice ciphertext, where it disappears in decoding. Such a fault demonstrates nothing, for a baseline or a verifiable arm, so the adapter picks a bit that matters:
 
@@ -126,6 +129,34 @@ For `flip_hint_bit`:
 For a baseline arm (S0-go, S0-cpp, M0), a fault shows up as `correct=false` with `detected=null`. That is the threat verification removes. For a verifiable arm, `detected=true` means the client rejected the answer.
 
 VeriSimplePIR rejects answers and parameter sets with `assert`, which aborts the whole process. So the C++ adapter runs parameter selection and every fault-injected verification in a `fork()`ed child. A child that aborts means `unsupported_params` or `detected=true`, and the parent still writes the record.
+
+## Recovery
+
+What the client does after it rejects an answer (spec §6.1, decision 12). Every online record of a faulted run reports the outcome.
+
+| `--recovery` | Arms | After a rejection |
+|---|---|---|
+| `abort` | all | stop. The record's outcome is `aborted`. |
+| `switch_replica` | S1, S2, S3, S4, M1 | send a fresh query for the same index to a replica holding the same database: another single server, or another server pair. |
+| `re_preprocess` | S1, S2 | discard the client's state, run the whole offline phase again with the same server, then send a fresh query to it. |
+
+Any other combination is a usage error (exit 2). A policy makes at most 3 further attempts after the first rejection, the same `k` as the disabled `retry_same`. On each attempt the serving server is faulted with probability `--fault-prob`, drawn from the fault stream, except that an honest replica never is. With `--fault drop_server`, the client counts a missing answer as a rejection.
+
+Every record gains these fields, null in offline records:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `recovery_outcome` | string or null | `accepted` (the first answer was accepted), `recovered` (accepted after at least one rejection), `aborted` (the policy gave up), or `silent_wrong` (the client accepted a wrong record) |
+| `recovery_attempts` | integer or null | further attempts made, 0 when the first answer was accepted |
+
+and these metrics, null in offline records and when `recovery_attempts` is 0:
+
+| Metric | Meaning |
+|---|---|
+| `recovery_s`, `recovery_cpu_s` | all work after the first rejection: queries, answers, decoding and verification, plus the offline phase for `re_preprocess` |
+| `recovery_up_bytes`, `recovery_down_bytes` | bytes those attempts exchanged, offline bytes included |
+
+`correct` and `detected` describe the first answer, as before. The outcome covers every attempt: `silent_wrong` means the record the client finally accepted is wrong, on the first attempt or a later one, so `recovered` always ends with the correct record. A baseline's outcome is `accepted` or `silent_wrong`, or `aborted` for `drop_server`. The analysis derives the time to a correct answer from the first attempt's times plus `recovery_s`.
 
 ## Encoding bytes
 

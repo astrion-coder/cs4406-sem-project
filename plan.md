@@ -9,7 +9,7 @@ This plan divides the remaining work between the two of us. The build contract i
 - Phase P0 is done. All three upstream codebases (SimplePIR, VeriSimplePIR, and Colombo et al.'s apir-code) build and pass their own test suites natively on the M1 Pro (`notebooks/01_g0_upstream_tests.ipynb`, cell 1). That is gate G0.
 - `make setup`, `make build`, `make test` and `make sysinfo` work. The `verify-vpir-bench` skill drives and checks them.
 - Phase P1 is done. Three adapters in `src/adapters/` cover all eight configurations, and they pass the conformance test (`notebooks/02_g1_conformance.ipynb`, cell 1). That is gate G1. `make conformance` reruns it.
-- IC-8's `docs/serve_protocol.md` is drafted for SG's load generator.
+- IC-8's `docs/serve_protocol.md` is drafted for SG's load generator. The P7 faults and recovery rules are in `src/adapters/README.md`, with their test in `tests/test_recovery.py`.
 - The harness, analysis and results do not exist yet.
 - Scope is everything in the spec. That means all eight configurations, the Tier 1 and Tier 2 phases P1 to P9, and the Tier 3 stretch phase P10 last.
 - This schedule assumes the 20 November deadline from earlier course notes. Nobody has confirmed it.
