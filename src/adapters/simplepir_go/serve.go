@@ -61,7 +61,12 @@ func openSession(o serve.Options) (*session, error) {
 			panic(perr)
 		}
 	}); err != nil {
-		return nil, fmt.Errorf("library rejected the parameters: %w", err)
+		cause := fmt.Errorf("library rejected the parameters: %w", err)
+		recs := make([]any, o.SessionQueries)
+		for i := range recs {
+			recs[i] = unsupportedRecord(cfg, "online", i, cause)
+		}
+		return nil, serve.Unsupported{Msg: cause.Error(), Records: recs}
 	}
 	s.publicKey = publicKey(cfg.seed)
 	if _, err := s.offline(); err != nil {
@@ -71,7 +76,7 @@ func openSession(o serve.Options) (*session, error) {
 	return s, nil
 }
 
-func (s *session) serveInfo(serverParallelism string) serve.Info {
+func (s *session) serveInfo() serve.Info {
 	sum := sha256.New()
 	buf := make([]byte, s.lay.RecordBytes)
 	for r := uint64(0); r < s.lay.Records; r++ {
@@ -80,9 +85,6 @@ func (s *session) serveInfo(serverParallelism string) serve.Info {
 	}
 	key := hex.EncodeToString(s.publicKey[:])
 	params := s.schemeParams()
-	if serverParallelism != "" {
-		params.Parallelism = serverParallelism
-	}
 	return serve.Info{
 		Arm: arm, ServerID: 0, Servers: 1, DBBytes: s.cfg.dbBytes, RecordBytes: &s.cfg.recordBytes,
 		NRecords: s.lay.Records, Seed: uint64(s.cfg.seed), UpstreamSHA: upstreamSHA,
@@ -102,7 +104,7 @@ func (serveArm) NewServer(o serve.Options) (serve.Server, error) {
 	_, q := s.pi.Query(0, s.serverShared, s.p, s.db.Info)
 	return &spServer{
 		s: s, qRows: q.Data[0].Rows, workers: o.Workers,
-		info: s.serveInfo(fmt.Sprintf("%d workers", o.Workers)),
+		info: s.serveInfo(),
 	}, nil
 }
 
@@ -140,7 +142,7 @@ func (serveArm) NewClient(o serve.Options) (serve.Client, error) {
 		return nil, err
 	}
 	s.clientStates()
-	return &spClient{s: s, info: s.serveInfo("")}, nil
+	return &spClient{s: s, info: s.serveInfo()}, nil
 }
 
 type spClient struct {

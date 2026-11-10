@@ -261,7 +261,10 @@ func RunClient(o Options, cl Client) error {
 }
 
 // clientRecordLine adds mode and metrics.rtt_s to a bench-shaped record
-// without the adapters' record types having to carry client-only fields.
+// without the adapters' record types having to carry client-only fields. A
+// nil rtt is an unsupported record, which gets mode alone. Every _s metric has
+// a _cpu_s twin of the same shape; the client cannot see a server's CPU time,
+// and a round trip has none of its own, so those twins are null per server.
 func clientRecordLine(rec any, rtt []float64) ([]byte, error) {
 	raw, err := json.Marshal(rec)
 	if err != nil {
@@ -275,13 +278,59 @@ func clientRecordLine(rec any, rtt []float64) ([]byte, error) {
 	}
 	m["mode"] = "client"
 	metrics, ok := m["metrics"].(map[string]any)
-	if !ok {
+	if !ok && rtt != nil {
 		return nil, fmt.Errorf("record has no metrics object")
 	}
-	metrics["rtt_s"] = rtt
+	if rtt != nil {
+		nulls := make([]any, len(rtt))
+		metrics["rtt_s"], metrics["rtt_cpu_s"], metrics["server_answer_cpu_s"] = rtt, nulls, nulls
+	}
 	line, err := json.Marshal(m)
 	if err != nil {
 		return nil, err
 	}
 	return append(line, '\n'), nil
+}
+
+// writeUnsupported appends what Main writes for parameters the library
+// rejects: for a server, one record naming the cell; for a client, the arm's
+// bench-shaped records, each marked with the mode.
+func writeUnsupported(o Options, un Unsupported) error {
+	if o.Out == "" {
+		return nil
+	}
+	var lines [][]byte
+	if o.Mode == "serve" {
+		var rb any
+		if o.RecordBytes > 0 {
+			rb = o.RecordBytes
+		}
+		line, err := json.Marshal(map[string]any{
+			"mode": "serve", "arm": o.Arm, "server_id": max(o.ServerID, 0), "db_bytes": o.DBBytes,
+			"record_bytes": rb, "seed": o.Seed, "workers": o.Workers,
+			"status": "unsupported_params", "error": un.Msg,
+		})
+		if err != nil {
+			return err
+		}
+		lines = append(lines, append(line, '\n'))
+	}
+	for _, r := range un.Records {
+		line, err := clientRecordLine(r, nil)
+		if err != nil {
+			return err
+		}
+		lines = append(lines, line)
+	}
+	f, err := os.OpenFile(o.Out, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	for _, l := range lines {
+		if _, err := f.Write(l); err != nil {
+			return err
+		}
+	}
+	return nil
 }

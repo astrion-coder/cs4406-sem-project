@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 
@@ -30,11 +31,29 @@ func openCell(o serve.Options) (cfg config, c cell, err error) {
 	}
 	logf("%s: laying out %d-byte database (seed %d)", o.Arm, cfg.dbBytes, cfg.seed)
 	if c, err = a.build(g, o.Seed); err != nil {
+		if errors.As(err, new(unsupportedError)) {
+			recs := make([]any, o.SessionQueries)
+			for i := range recs {
+				r := baseRecord(cfg)
+				r.Phase, r.Rep, r.Status, r.Error = "online", i, "unsupported_params", ptr(err.Error())
+				r.SchemeParams = map[string]any{"db_bits": g.dbBits, "parallelism": "inter_query"}
+				recs[i] = r
+			}
+			return cfg, nil, serve.Unsupported{Msg: err.Error(), Records: recs}
+		}
 		return cfg, nil, fmt.Errorf("library rejected the parameters: %w", err)
 	}
 	logf("%s: offline phase", o.Arm)
 	c.setup()
 	return cfg, c, nil
+}
+
+// serveParams is the bench scheme_params plus how serve mode spreads work
+// over cores (spec 9): different queries on different workers.
+func serveParams(c cell) map[string]any {
+	p := c.params()
+	p["parallelism"] = "inter_query"
+	return p
 }
 
 func fingerprint(cfg config, c cell, serverID int) serve.Info {
@@ -49,7 +68,7 @@ func fingerprint(cfg config, c cell, serverID int) serve.Info {
 		DBBytes: int64(cfg.dbBytes), RecordBytes: recordBytes, NRecords: uint64(cfg.geom.nRecords),
 		Seed: cfg.seed, UpstreamSHA: upstreamSHA, DBSHA256: hex.EncodeToString(sum[:]),
 		// apir-code fixes the public matrix (utils.SeedMatrixA), so there is no seed to compare.
-		PublicSeed: nil, SchemeParams: c.params(),
+		PublicSeed: nil, SchemeParams: serveParams(c),
 	}
 }
 
@@ -124,14 +143,26 @@ func (c *apirClient) Next() serve.Round {
 	queries, qs := c.c.query(index)
 	return serve.Round{Queries: queries, Finish: func(answers [][]byte, answerS []float64) serve.Outcome {
 		var rs span
-		out, rejected, panicMsg := reconstructGuarded(c.c, answers, &rs, true)
+		var out []byte
+		var rejected bool
+		var panicMsg string
+		why := ""
+		if g, ok := c.c.(decodeGuard); ok {
+			why = g.refuseDecode(answers)
+		}
+		if why != "" {
+			logf("%s: query %d: reconstruction not called, rejected: %s", c.cfg.armName, rep, why)
+			rejected = true
+		} else {
+			out, rejected, panicMsg = reconstructGuarded(c.c, answers, &rs, true)
+		}
 		correct := !rejected && bytes.Equal(out, c.c.truth(index))
 		if panicMsg != "" {
 			logf("%s: query %d: reconstruction panicked: %s", c.cfg.armName, rep, panicMsg)
 		}
 		r := c.base
 		r.Phase, r.Rep = "online", rep
-		r.SchemeParams = c.c.params()
+		r.SchemeParams = serveParams(c.c)
 		an := c.c.analytical()
 		r.Analytical.UpBytes, r.Analytical.DownBytes = an.UpBytes, an.DownBytes
 		m := &r.Metrics
@@ -141,7 +172,9 @@ func (c *apirClient) Next() serve.Round {
 		m.UpBytes, m.UpBytesPerServer = ptr(sum(up)), up
 		m.DownBytes, m.DownBytesPerServer = ptr(sum(down)), down
 		m.ServerAnswerS = answerS
-		m.ClientRecoverS, m.ClientRecoverCPUS = ptr(rs.wall), ptr(rs.cpu)
+		if why == "" {
+			m.ClientRecoverS, m.ClientRecoverCPUS = ptr(rs.wall), ptr(rs.cpu)
+		}
 		m.VerifyFused = ptr(c.cfg.arm.verifiable)
 		outcome := "accepted"
 		switch {

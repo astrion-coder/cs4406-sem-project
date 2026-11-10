@@ -576,6 +576,7 @@ def check_info(arm: Arm, info: dict, server_id: int, workers: int) -> None:
         f"{where}: public_seed {ps!r} is neither null nor hex")
     sp = info["scheme_params"]
     assert isinstance(sp, dict) and sp, f"{where}: scheme_params {sp!r} is not a non-empty object"
+    assert sp.get("parallelism") == "inter_query", f"{where}: scheme_params.parallelism {sp.get('parallelism')!r}"
 
 
 def _fresh_infos(cl: Cluster) -> list[dict]:
@@ -696,6 +697,16 @@ def test_client_records(arm, client_run):
             v = m[key]
             assert isinstance(v, list) and len(v) == arm.servers and all(
                 _is_num(x) and x > 0 for x in v), f"{where}: {key}={v!r}, want {arm.servers} positive times"
+        # The contract's rule: every _s metric has a _cpu_s twin, both null or both set, lists alike.
+        for key, v in m.items():
+            if key.endswith("_s") and not key.endswith("_cpu_s"):
+                twin = key[:-2] + "_cpu_s"
+                assert twin in m, f"{where}: {key} has no {twin}"
+                assert (v is None) == (m[twin] is None), f"{where}: {key}={v!r}, {twin}={m[twin]!r}"
+                if isinstance(v, list):
+                    assert isinstance(m[twin], list) and len(m[twin]) == len(v), f"{where}: {twin}={m[twin]!r}"
+        sp = r.get("scheme_params") or {}
+        assert sp.get("parallelism") == "inter_query", f"{where}: scheme_params.parallelism {sp.get('parallelism')!r}"
         for s in range(arm.servers):
             assert m["rtt_s"][s] >= m["server_answer_s"][s] * 0.999, (
                 f"{where}: rtt_s {m['rtt_s'][s]} below server_answer_s {m['server_answer_s'][s]}")
@@ -966,6 +977,29 @@ def test_fault_is_usage_error(arm, mode):
     res = _run_once(argv)
     assert res.returncode == 2, f"exit {res.returncode}, want usage error 2: {' '.join(argv)}\n{res.stderr[-800:]}"
     assert "vpir-serve ready" not in res.stderr
+
+
+@pytest.mark.parametrize("mode", ["serve", "client"])
+def test_unsupported_params(mode, tmp_path):
+    # LWE+ has a tECC value only for 1 MiB and up (adapter contract), so 64 KiB is unsupported.
+    arm = next(a for a in ARMS if a.name == "S3")
+    out = tmp_path / "out.jsonl"
+    argv = [*_base_argv(arm), "--mode", mode, "--arm", "S3", "--db-bytes", str(1 << 16), "--record-bytes", "0",
+            "--seed", str(SEED)]
+    if mode == "serve":
+        argv += ["--workers", "1", "--listen", "127.0.0.1:0", "--out", str(out)]
+        want = 1
+    else:
+        argv += ["--connect", "127.0.0.1:1", "--session-queries", "3", "--out", str(out)]
+        want = 3
+    res = _run_once(argv)
+    assert res.returncode == 0, f"exit {res.returncode}, want 0 as in bench mode\n{res.stderr[-800:]}"
+    assert "vpir-serve ready" not in res.stderr, "unsupported parameters must not print the ready line"
+    recs = [json.loads(line) for line in out.read_text().splitlines()]
+    assert len(recs) == want, f"{len(recs)} records, want {want}"
+    for r in recs:
+        assert r["status"] == "unsupported_params" and r.get("error"), f"record {r}"
+        assert r.get("mode") == mode and r["arm"] == "S3", f"record {r}"
 
 
 @pytest.mark.parametrize("arm", ARMS, ids=_ids(ARMS))

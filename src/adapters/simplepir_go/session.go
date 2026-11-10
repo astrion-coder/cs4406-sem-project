@@ -161,12 +161,18 @@ func (s *session) base(phase string, rep, warmup int) Record {
 
 func (s *session) schemeParams() SchemeParams {
 	l, p := s.lay, s.p
+	// Serve and client mode set publicKey: A comes from InitCompressedSeeded,
+	// and serve mode runs different queries on different workers (spec 9).
+	parallelism := "single-thread"
+	if s.publicKey != nil {
+		parallelism = "inter_query"
+	}
 	return SchemeParams{
 		N: p.N, LogQ: p.Logq, P: p.P, Sigma: p.Sigma, Ell: p.L, M: p.M,
 		EntryBits: l.EntryBits, Ne: l.Ne, Packing: l.Packing, PiecesPerRecord: l.Pieces,
 		RecordRows: l.RecordRows, Entries: l.Entries,
 		Basis: s.db.Info.Basis, Squishing: s.db.Info.Squishing,
-		CompressedA: false, Parallelism: "single-thread",
+		CompressedA: s.publicKey != nil, Parallelism: parallelism,
 	}
 }
 

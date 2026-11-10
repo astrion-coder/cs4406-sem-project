@@ -171,21 +171,24 @@ func writeUnsupported(cfg config, phase string, lay Layout, cause error, w write
 		phases = []string{"offline", "online"}
 	}
 	for _, ph := range phases {
-		rec := Record{
-			RunID: cfg.runID, GitSHAHarness: cfg.gitSHA, Platform: cfg.platform,
-			UpstreamSHA: upstreamSHA, Adapter: "simplepir_go", Arm: cfg.arm,
-			SchemeParams: map[string]any{},
-			DBBytes:      cfg.dbBytes, RecordBytes: cfg.recordBytes, RetrievedBits: 8 * cfg.recordBytes,
-			NRecords: uint64(cfg.dbBytes / cfg.recordBytes), Phase: ph, Seed: cfg.seed,
-			Fault: cfg.fault, FaultProb: cfg.faultProb, Recovery: cfg.recovery,
-			Status: "unsupported_params", Error: sptr(cause.Error()),
-			Metrics: Metrics{ProcessPeakRSSBytes: peakRSS()},
-		}
-		if err := w.write(rec); err != nil {
+		if err := w.write(unsupportedRecord(cfg, ph, 0, cause)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func unsupportedRecord(cfg config, phase string, rep int, cause error) Record {
+	return Record{
+		RunID: cfg.runID, GitSHAHarness: cfg.gitSHA, Platform: cfg.platform,
+		UpstreamSHA: upstreamSHA, Adapter: "simplepir_go", Arm: cfg.arm,
+		SchemeParams: map[string]any{},
+		DBBytes:      cfg.dbBytes, RecordBytes: cfg.recordBytes, RetrievedBits: 8 * cfg.recordBytes,
+		NRecords: uint64(cfg.dbBytes / cfg.recordBytes), Phase: phase, Rep: rep, Seed: cfg.seed,
+		Fault: cfg.fault, FaultProb: cfg.faultProb, Recovery: cfg.recovery,
+		Status: "unsupported_params", Error: sptr(cause.Error()),
+		Metrics: Metrics{ProcessPeakRSSBytes: peakRSS()},
+	}
 }
 
 func main() {

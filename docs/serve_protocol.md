@@ -21,6 +21,7 @@ This document fixes how a client talks to an adapter running as a server, for ph
 - `--listen 127.0.0.1:0` picks a free port. When the server is ready to answer, it writes exactly one line to stderr: `vpir-serve ready HOST:PORT`, with the real port. The harness waits for that line.
 - The client takes the same `--arm`, `--db-bytes`, `--record-bytes` and `--seed` as the server, because it rebuilds its offline state itself (see "Session").
 - `--fault` is a usage error (exit 2) in both modes. A targeted fault needs the queried index, which a PIR server does not know. Fault and recovery runs (RQ4) stay in bench mode.
+- Parameters the arm does not support end as in bench mode: the process prints the reason, writes no ready line, appends records with `status: "unsupported_params"` and `error` to `--out` (a server one record naming the cell, a client one bench-shaped record per query), and exits 0.
 - Exit codes are as in bench mode. On SIGTERM or SIGINT the server stops accepting connections, answers the queries it has already read, appends one summary record to `--out` if it was given, and exits 0. The summary record is one JSON object: `"mode": "serve"`, the `INFO` fields except `scheme_params`, and the final `STATS` fields (see "Server statistics").
 
 ## Framing
@@ -66,6 +67,8 @@ The protocol does not transfer offline state. The client rebuilds it from the sa
 
 - `db_sha256` is the SHA-256 of the seeded database bytes.
 - `public_seed` is the seed of the public parameters (the matrix `A`), in hex, or null where upstream fixes them. apir-code fixes `A` (`utils.SeedMatrixA`). S0-go must use upstream's `InitCompressedSeeded` in serve and client mode, because `Init` draws `A` from an unseeded generator. That call overwrites the library's global PRG reader (`simple_pir.go:110,115`), so it runs once, at startup, before any query.
+- VeriSimplePIR's upstream `Init` and `PreprocInit` draw `A` and `A_2` from system randomness, so in serve and client mode the adapter draws them with upstream's own `pseudorandom`, the same distribution, from a stream keyed by `--seed`. `public_seed` is that key in hex. Bench mode keeps upstream's draw.
+- `scheme_params.parallelism` is `"inter_query"` in `INFO` and in client records for every arm (spec §9): different queries run on different workers, and no arm splits one query across cores.
 - S1 and S2 clients run the whole preprocessing exchange locally against their own server object built on the same database. The server's answers depend only on the database and the query, so the client's verification state fits the remote server.
 - The client compares `arm`, `db_bytes`, `record_bytes`, `seed`, `db_sha256` and `public_seed` with its own, and exits 1 on any difference. The corpus run below then proves agreement directly, since every answer must decode correctly.
 
@@ -95,7 +98,7 @@ The load generator asks at the start and the end of its steady-state window. `se
 `--mode client --corpus-out PATH` runs Q queries one at a time against honest servers, checks that each decodes to the right record, and writes:
 
 - `PATH`, a file of frames. First the `INFO` of each server, in server order. Then for each query, with `req_id` = 1, 2, ..., Q, and for each server in order: its `QUERY` frame, then an `EXPECT` frame with the length and SHA-256 of that server's answer.
-- `--out`, one bench-shaped online record per query, with the client-side costs `query_gen_s`, `client_recover_s` and `client_verify_s`. `server_answer_s` comes from `answer_ns`, and a new metric `rtt_s` gives one round-trip time per server.
+- `--out`, one bench-shaped online record per query, with `"mode": "client"` and the client-side costs `query_gen_s`, `client_recover_s` and `client_verify_s` (null where the arm has no separate check, as in bench records). `server_answer_s` comes from `answer_ns`, and a new metric `rtt_s` gives one round-trip time per server. As in bench records, every `_s` metric has a `_cpu_s` twin of the same shape. The client cannot see a server's CPU time, and a round trip has none of its own, so `server_answer_cpu_s` and `rtt_cpu_s` hold one null per server.
 
 The client exits 1 if any answer decodes wrong, so a corpus only ever records answers that a verified honest server gave. Each library's answer is a deterministic function of the database and the query (see "Threads"), so a byte-identical answer under load proves the answer correct. This is the check `test_concurrent_correctness` makes.
 
@@ -129,6 +132,7 @@ Rules that follow:
 The table rests on reading the code. Once serve mode exists, IC also runs the Go servers built with `-race` and the C++ server built with `-fsanitize=thread`, at 1 MiB with W = 6 and 16 clients, and records the result here.
 
 - **Go, 10 November.** No race reports and no mismatched answers. S0-go, S3, M0 and M1 ran at 1 MiB for 65 s, and S4 at 64 KiB for 100 s. Every answer was checked against the corpus by SHA-256: 1,137,619 for S0-go, 26,628 for S3, 25,544 for M0, 2,072 for M1 and 154 for S4. The detector cannot see inside S0-go's C kernel, so that part still rests on the reading above.
+- **C++, 10 November.** Built with `-fsanitize=thread`, each VeriSimplePIR arm ran at 1 MiB with W = 6 and 16 clients for 75 s, while another thread sent `STATS` requests, wrong-length queries and malformed frames and reset connections mid-flight, ending with SIGTERM under load. TSan printed nothing, and every answer matched: 1,225,927 for S0-cpp, 1,219,667 for S1 and 977,261 for S2. A deliberate two-thread race built the same way did produce a report, so TSan was live. The library is not instrumented, so memory only `Answer` touches inside the library still rests on the reading above.
 
 ## Changes this needs elsewhere
 

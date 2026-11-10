@@ -132,6 +132,17 @@ func ParseOptions(args []string) (Options, error) {
 	return o, err
 }
 
+// Unsupported is a constructor's report that the library rejects these
+// parameters. Main then writes no ready line, appends the records to --out
+// (a client gives one bench-shaped record per query, a server none) and exits
+// 0, as bench mode does.
+type Unsupported struct {
+	Msg     string
+	Records []any
+}
+
+func (u Unsupported) Error() string { return u.Msg }
+
 // Arm is what an adapter supplies. Either constructor may return a
 // UsageError for options only this arm can judge.
 type Arm interface {
@@ -157,6 +168,15 @@ func Main(args []string, a Arm) int {
 		}
 	}
 	if err == nil {
+		return 0
+	}
+	var un Unsupported
+	if errors.As(err, &un) {
+		fmt.Fprintln(os.Stderr, "unsupported parameters:", un.Msg)
+		if err := writeUnsupported(o, un); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return 1
+		}
 		return 0
 	}
 	var ue UsageError
