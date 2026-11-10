@@ -148,3 +148,78 @@ def client_rows_for(cell: Cell, profile: amortise.Profile, *, run_id: str = "syn
         r["metrics"] |= {"rtt_s": [float(rtt_s * rng.lognormal(0.0, NOISE_SIGMA)) for _ in range(servers)],
                          "rtt_cpu_s": [None] * servers, "server_answer_cpu_s": [None] * servers}
     return rows
+
+
+LOADGEN_CONTENTION = 0.08  # invented: each worker past the first slows every worker by this share
+
+
+def service_s(arm: str, db_bytes: int) -> float:
+    """One query's server answer time in the cost model; a two-server arm's servers answer in parallel."""
+    return MODELS[arm].answer_s_per_gib * db_bytes / GIB
+
+
+def planted_capacity_qps(arm: str, db_bytes: int, workers: int) -> float:
+    """The throughput the synthetic server sustains with `workers` workers. A closed sweep at enough clients
+    reaches it, so it is the saturation throughput F10 should mark. Baseline over verifiable capacity is
+    TRUE_SERVER_OVERHEAD at every W, which F11 should recover."""
+    return workers / (1 + LOADGEN_CONTENTION * (workers - 1)) / service_s(arm, db_bytes)
+
+
+def _loadgen_row(t, workers: int, run: int, load: dict, rng: np.random.Generator, *, clients: int | None,
+                 rate: float | None, run_id: str) -> dict:
+    jitter = lambda x: float(x * rng.lognormal(0.0, NOISE_SIGMA))  # noqa: E731
+    s, cap, window = service_s(t.arm, t.db_bytes), planted_capacity_qps(t.arm, t.db_bytes, workers), load["window_s"]
+    if rate is None:  # closed loop with no think time: Little's law gives the latency
+        qps = min(clients / s, cap)
+        lat, sent = clients / qps, int(qps * window)
+    else:
+        rho = rate / cap
+        qps = min(rate, cap)
+        lat = s * (1 + min(rho, 0.95) / (workers * (1 - min(rho, 0.95)))) + window / 2 * max(0.0, 1 - 1 / rho)
+        sent = int(rate * window)
+    qps, lat = jitter(qps), jitter(lat)
+    completed = int(qps * window)
+    m = MODELS[t.arm]
+    client_s = m.query_gen_s + m.recover_s + (m.verify_s or 0.0)
+    return {
+        "mode": "loadgen", "run_id": run_id, "git_sha_harness": None, "platform": PLATFORM, "arm": t.arm,
+        "db_bytes": t.db_bytes, "record_bytes": t.record_bytes, "seed": t.seed, "workers": workers,
+        "loop": "closed" if rate is None else "open", "clients": clients, "offered_load_qps": rate, "run": run,
+        "warmup_s": load["warmup_s"], "window_s": window, "sent": sent, "completed": completed, "mismatched": 0,
+        "errors": 0, "throughput_qps": qps, "lat_p50_s": lat, "lat_p95_s": 1.25 * lat, "lat_p99_s": 1.5 * lat,
+        "e2e_lat_p50_s": lat + client_s, "e2e_lat_p95_s": 1.25 * lat + client_s,
+        "e2e_lat_p99_s": 1.5 * lat + client_s, "server_cpu_util": 100.0 * min(qps * s, workers),
+        "server_peak_rss_bytes": int(64 << 20) + t.db_bytes, "loadgen_cpu_util": 5.0, "status": "ok", "error": None,
+    }
+
+
+def loadgen_points(targets: Iterable, load: dict, *, run_id: str = "synthetic-loadgen",
+                   seed: int = 0) -> dict[tuple[str, str], list[dict]]:
+    """Rows as harness/loadgen.py lays them out, keyed by (cell_id, point name). The closed sweep follows the
+    harness's stop rule and `saturated` status, and the open loop's rates are fractions of the closed
+    sweep's measured saturation throughput, both through the harness's own functions."""
+    from cs4406_sem_project.harness import loadgen  # loadgen imports the runner stack; keep it off the import path
+
+    out: dict[tuple[str, str], list[dict]] = {}
+    for t in targets:
+        rng = np.random.default_rng([seed, zlib.crc32(f"{t.cell_id}/loadgen".encode())])
+        done: dict[int, list[dict]] = {}
+        while (c := loadgen.next_clients(load, done)) is not None:
+            p = next(p for p in loadgen.closed_points(load) if p.clients == c)
+            limit = loadgen.p95_limit(load, done)
+            rows = [_loadgen_row(t, p.workers, r, load, rng, clients=c, rate=None, run_id=run_id)
+                    for r in range(p.runs)]
+            for r in rows:
+                r["status"] = "saturated" if limit is not None and r["lat_p95_s"] > limit else "ok"
+            done[c] = out[(t.cell_id, p.name)] = rows
+        sat = loadgen.saturation_qps(done)
+        for p in loadgen.open_points(load):
+            rows = [_loadgen_row(t, p.workers, r, load, rng, clients=None, rate=p.fraction * sat, run_id=run_id)
+                    for r in range(p.runs)]
+            for r in rows:
+                r["status"] = "saturated" if r["completed"] < 0.9 * r["sent"] else "ok"  # src/loadgen OpenSaturation
+            out[(t.cell_id, p.name)] = rows
+        for p in loadgen.multicore_points(load):
+            out[(t.cell_id, p.name)] = [_loadgen_row(t, p.workers, r, load, rng, clients=p.clients, rate=None,
+                                                     run_id=run_id) for r in range(p.runs)]
+    return out
