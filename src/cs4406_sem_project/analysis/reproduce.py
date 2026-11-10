@@ -23,7 +23,7 @@ TOLERANCE = {"text": 1.05, "plot": 1.2}  # spec H1 (+-5 %); docs/reproduction_ta
 CHECKS = ("ratio", "max_ratio", "trend_up", "less", "abs")
 ONLINE = set(aggregate.METRICS["online"])
 T3_COLUMNS = ["id", "ref", "where", "claim", "cell", "ours", "ci_lo", "ci_hi", "published", "target",
-              "deviation", "verdict", "rule"]
+              "deviation", "verdict", "rule", "check", "unit", "target_lo", "target_hi"]
 
 
 @dataclass(frozen=True)
@@ -144,7 +144,9 @@ def compare(df: pd.DataFrame, targets: list[Target]) -> pd.DataFrame:
     for t in targets:
         tol = TOLERANCE[t.precision]
         base = {"id": t.id, "ref": t.ref, "where": t.where, "claim": t.claim, "published": t.published,
-                "target": _target_text(t), "rule": t.rule}
+                "target": _target_text(t), "rule": t.rule, "check": t.check, "unit": t.unit,
+                "target_lo": t.value if t.check in ("ratio", "abs") and t.value is not None else t.lo,
+                "target_hi": t.value if t.value is not None else t.hi}
         measured = {db: measure(df, t, db) for db in t.db}
         for db, m in measured.items():
             cell = t.num.label(db) + ("" if t.den is None else f" / {t.den.label(db)}")
