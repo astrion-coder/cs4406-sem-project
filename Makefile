@@ -100,8 +100,10 @@ RUNS_ARGS = $(if $(SYNTHETIC),--synthetic $(SYNTHETIC),--runs $(or $(RUNS),$(err
 analyse:
 	uv run python -m cs4406_sem_project.analysis.aggregate --runs $(or $(RUNS),$(error set RUNS="results/raw/<run_id> ...")) --out results/processed
 
+# SESSION=results/raw/<run_id>/session adds F8 and NETEM=results/raw/<run_id>/netem adds F9; without them
+# the two figures are skipped with a note.
 figures:
-	uv run python -m cs4406_sem_project.analysis.plots $(RUNS_ARGS) --out results/figures
+	uv run python -m cs4406_sem_project.analysis.plots $(RUNS_ARGS) $(if $(SESSION),--session $(SESSION)) $(if $(NETEM),--netem $(NETEM)) --out results/figures
 
 # RQ3b and RQ3a (task SG-6). Bring the link up first: sudo src/cs4406_sem_project/harness/dummynet.sh up <profile>
 # then calibrate it (gate G4). PROFILE=none runs the loopback baseline. RUN_ID groups every profile of one run.
