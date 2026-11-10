@@ -112,3 +112,18 @@ netem: adapters
 
 session-check: adapters
 	uv run python -m cs4406_sem_project.harness.session_check --grid-run $(or $(GRID_RUN),$(error set GRID_RUN=<grid run id>)) --run-id $(or $(RUN_ID),$(error set RUN_ID=<p6 run id>))
+
+# RQ6 and RQ7 (task SG-7). The load generator uses only Go's standard library.
+LOADGEN := build/loadgen/loadgen
+
+.PHONY: loadgen concurrency
+
+loadgen:
+	mkdir -p $(dir $(LOADGEN))
+	cd src/loadgen && GOPROXY=off go build -o $(CURDIR)/$(LOADGEN) .
+
+# Every focus cell: the closed and open sweeps (RQ6) and the worker sweep (RQ7) from configs/load.yaml, then
+# gate G7 on the rows. RUN_ID groups and resumes a run; DRY=1 prints the plan; EXPERIMENTS=closed,open,multicore.
+concurrency: adapters loadgen sysinfo
+	uv run python -m cs4406_sem_project.harness.loadgen --run-id $(or $(RUN_ID),$(error set RUN_ID=<p9 run id>)) $(if $(EXPERIMENTS),--experiments $(EXPERIMENTS)) $(if $(DRY),--dry-run)
+	$(if $(DRY),,uv run python -m cs4406_sem_project.harness.loadgen --run-id $(RUN_ID) --g7)
