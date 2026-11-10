@@ -1,12 +1,13 @@
-"""Figures F1-F6, F8, F9 and tables T1-T4 (spec 12) from raw result rows, in one command.
+"""Figures F1-F6, F8-F11 and tables T1-T4 (spec 12) from raw result rows, in one command.
 
     uv run python -m cs4406_sem_project.analysis.plots --runs results/raw/<run_id> ... [--out results/figures]
         [--session results/raw/<run_id>/session] [--netem results/raw/<run_id>/netem]
+        [--loadgen results/raw/<run_id>/loadgen]
     uv run python -m cs4406_sem_project.analysis.plots --synthetic tier1 --out <dir>
 
-F8 needs --session (session_check.py) and F9 needs --netem (netem.py); without its input a figure is
-skipped with a note. --synthetic builds every output from analysis/synthetic.py rows, and stamps every
-figure and table "SYNTHETIC, not a result". Processed tables go to --processed as parquet.
+F8 needs --session (session_check.py), F9 needs --netem (netem.py) and F10 and F11 need --loadgen
+(harness/loadgen.py); without its input a figure is skipped with a note. --synthetic builds every output
+from analysis/synthetic.py rows, and stamps every figure and table "SYNTHETIC, not a result". Processed tables go to --processed as parquet.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.ticker import EngFormatter, FuncFormatter  # noqa: E402
 
 from cs4406_sem_project.analysis import aggregate, amortise, frame, reproduce, synthetic  # noqa: E402
-from cs4406_sem_project.harness import grid, netem, session_check  # noqa: E402
+from cs4406_sem_project.harness import grid, loadgen, netem, session_check  # noqa: E402
 from cs4406_sem_project.harness.grid import fmt_size  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -63,12 +64,13 @@ class Tables:
     breakdown: pd.DataFrame
     session: pd.DataFrame | None = None  # F8, from session_totals()
     emulation: pd.DataFrame | None = None  # F9, from emulation()
+    load_curves: pd.DataFrame | None = None  # F10 and F11, from load_curves()
 
 
 def build(df: pd.DataFrame, status: pd.DataFrame, session: pd.DataFrame | None = None,
-          netem_rows: pd.DataFrame | None = None) -> Tables:
-    """`session` is session_check's comparison table and `netem_rows` the client rows with a profile
-    column; either is None when that experiment has not run."""
+          netem_rows: pd.DataFrame | None = None, loadgen_rows: pd.DataFrame | None = None) -> Tables:
+    """`session` is session_check's comparison table, `netem_rows` the client rows with a profile column
+    and `loadgen_rows` frame.load_loadgen's table; each is None when that experiment has not run."""
     summary = aggregate.summarise(df)
     med = aggregate.medians(summary)
     latency = amortise.latency_table(df[df.phase == "online"], amortise.load_profiles())
@@ -77,7 +79,8 @@ def build(df: pd.DataFrame, status: pd.DataFrame, session: pd.DataFrame | None =
         amortised=amortise.amortised_table(med), latency=latency,
         t3=reproduce.compare(df, reproduce.load_targets()), breakdown=breakdown(med),
         session=None if session is None else session_totals(med, session),
-        emulation=None if netem_rows is None or netem_rows.empty else emulation(netem_rows, latency))
+        emulation=None if netem_rows is None or netem_rows.empty else emulation(netem_rows, latency),
+        load_curves=None if loadgen_rows is None or loadgen_rows.empty else load_curves(loadgen_rows))
 
 
 def processed(t: Tables) -> dict[str, pd.DataFrame]:
@@ -87,6 +90,9 @@ def processed(t: Tables) -> dict[str, pd.DataFrame]:
         out["session_totals"] = t.session
     if t.emulation is not None:
         out |= {"emulation": t.emulation, "emulation_overheads": emulation_overheads(t.emulation)}
+    if t.load_curves is not None:
+        out |= {"load_curves": t.load_curves, "saturation": saturation(t.load_curves),
+                "core_scaling": core_scaling(t.load_curves)}
     return out
 
 
@@ -167,6 +173,38 @@ def emulation_overheads(em: pd.DataFrame) -> pd.DataFrame:
         parts.append(m[keys].assign(pair=p.label, arm=p.num, byte_overhead=m.online_bytes_v / m.online_bytes_b,
                                     latency_overhead=m.emulated_p50_v / m.emulated_p50_b))
     return pd.concat(parts, ignore_index=True)
+
+
+LOAD_KEYS = ["arm", "db_bytes", "record_bytes", "cell_id", "experiment", "point", "workers"]
+
+
+def load_curves(lg: pd.DataFrame) -> pd.DataFrame:
+    """F10's and F11's table: per cell and sweep point, the median over runs of throughput and latency."""
+    g = lg.groupby(LOAD_KEYS)
+    out = pd.DataFrame({
+        "clients": g.clients.first(), "offered_load_qps": g.offered_load_qps.median(),
+        "throughput_qps": g.throughput_qps.median(), "lat_p50_s": g.lat_p50_s.median(),
+        "lat_p95_s": g.lat_p95_s.median(), "server_cpu_util": g.server_cpu_util.median(),
+        "saturated_runs": g.status.agg(lambda s: int((s == "saturated").sum())), "n": g.size()}).reset_index()
+    return out.sort_values(["cell_id", "experiment", "throughput_qps"]).reset_index(drop=True)
+
+
+def saturation(curves: pd.DataFrame) -> pd.DataFrame:
+    """Per cell, the closed-loop point with the highest median throughput: harness/loadgen.py's saturation
+    throughput, which also sets the open loop's offered loads."""
+    closed = curves[curves.experiment == "closed"]
+    return closed.loc[closed.groupby("cell_id").throughput_qps.idxmax()].reset_index(drop=True)
+
+
+def core_scaling(curves: pd.DataFrame) -> pd.DataFrame:
+    """overhead_vs_cores(W) (spec 6): per price pair and cell, baseline over verifiable throughput at each W."""
+    mc = curves[curves.experiment == "multicore"]
+    keys = ["db_bytes", "record_bytes", "workers"]
+    parts = [mc[mc.arm == p.num].merge(mc[mc.arm == p.den], on=keys, suffixes=("_v", "_b"))
+             .assign(pair=p.label, arm=p.num) for p in PRICE_PAIRS]
+    out = pd.concat(parts, ignore_index=True)
+    out["overhead"] = out.throughput_qps_b / out.throughput_qps_v
+    return out[["pair", "arm", *keys, "throughput_qps_v", "throughput_qps_b", "overhead"]]
 
 
 def _nz(x) -> float:
@@ -559,10 +597,100 @@ def f9_network(t: Tables) -> plt.Figure:
     return fig
 
 
+def _focus_load(t: Tables) -> tuple[pd.DataFrame, int]:
+    """The load curves of the 1 KiB cells (one-bit arms: their only cell) at the largest database."""
+    if t.load_curves is None:
+        raise Skip("no load-generator rows; pass --loadgen results/raw/<run_id>/loadgen after harness/loadgen.py")
+    c = t.load_curves
+    c = c[(c.record_bytes == FOCUS_RECORD) | c.arm.isin(ONE_BIT)]
+    if c.empty:
+        raise Skip("no 1 KiB or one-bit load-generator cell")
+    db = int(c.db_bytes.max())
+    return c[c.db_bytes == db], db
+
+
+F10_LOOPS = {"closed": "closed loop, C clients", "open": "open loop, Poisson rate λ"}
+F10_LATENCY = {"lat_p50_s": "p50", "lat_p95_s": "p95"}
+F10_SATURATION_POINT = "open_w{w}_f1.00"
+
+
+def f10_load(t: Tables) -> plt.Figure:
+    curves, db = _focus_load(t)
+    sat = saturation(curves).set_index("arm")
+    fig, axes = plt.subplots(len(F10_LATENCY), len(F10_LOOPS), figsize=(11, 6.6), sharex=True, squeeze=False)
+    for j, (loop, loop_label) in enumerate(F10_LOOPS.items()):
+        for i, (col, pct) in enumerate(F10_LATENCY.items()):
+            ax = axes[i][j]
+            sel = curves[curves.experiment == loop]
+            if sel.empty:
+                _empty(ax, f"no {loop}-loop rows")
+                continue
+            for arm in [a for a in grid.ARMS if a in set(sel.arm)]:
+                a = sel[sel.arm == arm].sort_values("clients" if loop == "closed" else "offered_load_qps")
+                _arm_line(ax, arm, a.throughput_qps, a[col])
+                if arm not in sat.index:
+                    continue
+                at = (a[a.clients == sat.loc[arm, "clients"]] if loop == "closed"
+                      else a[a.point == F10_SATURATION_POINT.format(w=int(a.workers.iloc[0]))])
+                ax.plot(at.throughput_qps, at[col], marker="D", markersize=8, color=COLOR[arm], markeredgecolor=INK,
+                        markeredgewidth=1.2, linestyle="none", zorder=5)
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+            ax.set_ylabel(f"{pct} latency (s)")
+            if i == 0:
+                ax.set_title(loop_label, loc="left")
+            if i == len(F10_LATENCY) - 1:
+                ax.set_xlabel("achieved throughput (queries/s)")
+    handles, labels = [], []
+    for ax in axes.flat:
+        for h, lab in zip(*ax.get_legend_handles_labels()):
+            if lab not in labels:
+                handles.append(h)
+                labels.append(lab)
+    handles.append(plt.Line2D(
+        [], [], marker="D", markersize=7, color=INK_2, markeredgecolor=INK, linestyle="none",
+        label="saturation: closed loop's highest median throughput; open loop at λ = 100 % of it"))
+    fig.legend(handles=handles, loc="upper center", ncol=4, bbox_to_anchor=(0.5, 0.96))
+    fig.suptitle(f"F10  Throughput against latency under load at {fmt_size(db)} x 1 KiB (S3 retrieves one bit), "
+                 "medians over runs", x=0.02, ha="left", fontsize=11)
+    fig.tight_layout(rect=(0, 0, 1, 0.9))
+    return fig
+
+
+def f11_cores(t: Tables) -> plt.Figure:
+    curves, db = _focus_load(t)
+    mc = curves[curves.experiment == "multicore"]
+    if mc.empty:
+        raise Skip("no multicore rows; run harness/loadgen.py with --experiments multicore")
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(11, 3.8))
+    ws = sorted(mc.workers.unique())
+    ax.plot(ws, ws, color=AXIS, linewidth=1, linestyle="--", label="ideal: W x the W = 1 throughput")
+    for arm in [a for a in grid.ARMS if a in set(mc.arm)]:
+        a = mc[mc.arm == arm].sort_values("workers")
+        _arm_line(ax, arm, a.workers, a.throughput_qps / a.throughput_qps.iloc[0])
+    ax.set_ylabel("throughput relative to W = 1")
+    ax.legend(loc="upper left", ncol=2)
+    ov = core_scaling(mc)
+    for arm, g in ov.groupby("arm", sort=False):
+        _arm_line(ax2, arm, g.workers, g.overhead)
+        ax2.annotate(g.pair.iloc[0], (g.workers.iloc[-1], g.overhead.iloc[-1]), textcoords="offset points",
+                     xytext=(6, 0), va="center", fontsize=7, color=INK_2)
+    ax2.yaxis.set_major_formatter(FuncFormatter(lambda v, _pos: f"{v:g}×"))
+    ax2.set_ylabel("throughput, baseline / verifiable")
+    for a in (ax, ax2):
+        a.set_xticks(ws)
+        a.set_xlabel("server workers, W")
+    fig.suptitle(f"F11  Throughput and overhead against server cores at {fmt_size(db)} x 1 KiB, "
+                 "medians over runs", x=0.02, ha="left", fontsize=11)
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    return fig
+
+
 FIGURE_BUILDERS: dict[str, Callable[[Tables], plt.Figure]] = {
     "F1_reproduction": f1_reproduction, "F2_overhead_heatmaps": f2_heatmaps, "F3_absolute_cost": f3_absolute,
     "F4_amortised": f4_amortised, "F5_network": f5_network, "F6_breakdown": f6_breakdown,
-    "F8_session": f8_session, "F9_emulated_network": f9_network,
+    "F8_session": f8_session, "F9_emulated_network": f9_network, "F10_load_latency": f10_load,
+    "F11_cores": f11_cores,
 }
 
 
@@ -658,10 +786,11 @@ def main(argv: list[str] | None = None) -> list[Path]:
     p.add_argument("--sysinfo", type=Path, default=SYSINFO)
     p.add_argument("--session", type=Path, help="results/raw/<run_id>/session from session_check.py, for F8")
     p.add_argument("--netem", type=Path, help="results/raw/<run_id>/netem from netem.py, for F9")
+    p.add_argument("--loadgen", type=Path, help="results/raw/<run_id>/loadgen from harness/loadgen.py, for F10, F11")
     args = p.parse_args(argv)
     if args.synthetic:
-        if args.session or args.netem:
-            p.error("--synthetic builds its own session and network rows; drop --session and --netem")
+        if args.session or args.netem or args.loadgen:
+            p.error("--synthetic builds its own session, network and load rows; drop --session, --netem, --loadgen")
         g = grid.load()
         df = frame.rows_to_frame(synthetic.rows_for_cells(grid.expand(g, args.synthetic)))
         status = pd.DataFrame()
@@ -673,11 +802,13 @@ def main(argv: list[str] | None = None) -> list[Path]:
             frame.rows_to_frame([r for c in cells for r in synthetic.client_rows_for(c, prof, run_id="synthetic-netem")
                                  ]).assign(profile=name)
             for name, prof in amortise.load_profiles().items()], ignore_index=True)
+        load = loadgen.yaml.safe_load(loadgen.LOAD_PATH.read_text())
+        loadgen_rows = frame.loadgen_frame(synthetic.loadgen_points(loadgen.targets(g, "focus"), load))
         processed_dir = args.processed or args.out / "processed"
     else:
         if not args.reference_platform.exists():
             p.error(f"{args.reference_platform} is missing; run make sysinfo on the reference Mac")
-        for d in (args.session, args.netem):
+        for d in (args.session, args.netem, args.loadgen):
             if d is not None and not d.is_dir():
                 p.error(f"{d} is not a directory")
         reference = args.reference_platform.read_text().strip()
@@ -689,10 +820,11 @@ def main(argv: list[str] | None = None) -> list[Path]:
                 p.error(f"{args.session} compares against grid run {grid_run}, which is not among --runs; "
                         "F8 would draw two different runs' medians")
         netem_rows = frame.load_netem(args.netem, reference) if args.netem else None
+        loadgen_rows = frame.load_loadgen(args.loadgen, reference) if args.loadgen else None
         processed_dir = args.processed or aggregate.PROCESSED
     if df.empty:
         p.error("no usable rows")
-    t = build(df, status, session, netem_rows)
+    t = build(df, status, session, netem_rows, loadgen_rows)
     aggregate.write_tables(processed(t), processed_dir)
     written = render(t, args.out, synthetic_run=bool(args.synthetic), sysinfo=args.sysinfo)
     for path in written:

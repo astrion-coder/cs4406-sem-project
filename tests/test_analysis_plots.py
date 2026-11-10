@@ -4,11 +4,11 @@ import pandas as pd
 import pytest
 
 from cs4406_sem_project.analysis import aggregate, amortise, frame, plots, synthetic
-from cs4406_sem_project.harness import grid, session_check
+from cs4406_sem_project.harness import grid, loadgen, session_check
 
 GRID_FIGURES = ["F1_reproduction", "F2_overhead_heatmaps", "F3_absolute_cost", "F4_amortised", "F5_network",
                 "F6_breakdown"]
-FIGURES = GRID_FIGURES + ["F8_session", "F9_emulated_network"]
+FIGURES = GRID_FIGURES + ["F8_session", "F9_emulated_network", "F10_load_latency", "F11_cores"]
 TABLES = ["T1_machine", "T2_scheme_params", "T3_reproduction", "T4_overheads"]
 
 
@@ -158,5 +158,55 @@ def test_missing_inputs_skip_f8_and_f9_with_a_note(tmp_path, capsys):
                 "--sysinfo", str(tmp_path / "absent.json")])
     err = capsys.readouterr().err
     assert "skipped F8_session" in err and "skipped F9_emulated_network" in err
+    assert "skipped F10_load_latency" in err and "skipped F11_cores" in err
     assert not (out / "F8_session.png").exists() and not (out / "F9_emulated_network.png").exists()
     assert (out / "F4_amortised.png").exists()
+
+
+def test_synthetic_f10_marks_the_planted_saturation(synthetic_out):
+    sat = pd.read_parquet(synthetic_out / "processed" / "saturation.parquet")
+    curves = pd.read_parquet(synthetic_out / "processed" / "load_curves.parquet")
+    assert len(sat) == curves.cell_id.nunique() == len(loadgen.targets(grid.load(), "focus"))
+    for r in sat.itertuples():
+        planted = synthetic.planted_capacity_qps(r.arm, r.db_bytes, r.workers)
+        assert r.throughput_qps == pytest.approx(planted, rel=0.05), r.cell_id
+
+
+def test_synthetic_f11_recovers_the_planted_overhead_at_every_w(synthetic_out):
+    ov = pd.read_parquet(synthetic_out / "processed" / "core_scaling.parquet")
+    assert set(ov.workers) == {1, 2, 4, 6} and set(ov.arm) == set(synthetic.TRUE_SERVER_OVERHEAD)
+    for r in ov.itertuples():
+        assert r.overhead == pytest.approx(synthetic.TRUE_SERVER_OVERHEAD[r.arm], rel=0.08)
+
+
+def _write_loadgen(d, platform: str = synthetic.PLATFORM):
+    load = loadgen.yaml.safe_load(loadgen.LOAD_PATH.read_text())
+    targets = [t for t in loadgen.targets(grid.load(), "focus") if t.arm in ("S0-cpp", "S1")]
+    for (cell, point), rows in synthetic.loadgen_points(targets, load).items():
+        (d / cell).mkdir(parents=True, exist_ok=True)
+        (d / cell / f"{point}.jsonl").write_text("".join(json.dumps(r | {"platform": platform}) + "\n" for r in rows))
+
+
+def test_loadgen_input_renders_f10_and_f11_unmarked(tmp_path):
+    _write_run(tmp_path / "run", grid.expand(grid.load(), "smoke"))
+    _write_loadgen(tmp_path / "loadgen")
+    ref = tmp_path / "reference_platform.txt"
+    ref.write_text(synthetic.PLATFORM + "\n")
+    out = tmp_path / "out"
+    plots.main(["--runs", str(tmp_path / "run"), "--loadgen", str(tmp_path / "loadgen"), "--out", str(out),
+                "--processed", str(tmp_path / "processed"), "--reference-platform", str(ref),
+                "--sysinfo", str(tmp_path / "absent.json")])
+    assert (out / "F10_load_latency.png").stat().st_size > 1000 and (out / "F11_cores.pdf").stat().st_size > 1000
+    assert set(pd.read_parquet(tmp_path / "processed" / "core_scaling.parquet").pair) == {"S1/S0-cpp"}
+
+
+def test_loadgen_rows_from_another_platform_are_refused(tmp_path):
+    _write_run(tmp_path / "run", grid.expand(grid.load(), "smoke"))
+    _write_loadgen(tmp_path / "loadgen", platform="arm64-darwin-Apple M1 Pro")
+    ref = tmp_path / "reference_platform.txt"
+    ref.write_text(synthetic.PLATFORM + "\n")
+    with pytest.raises(frame.RefusedRows, match="reference platform"):
+        plots.main(["--runs", str(tmp_path / "run"), "--loadgen", str(tmp_path / "loadgen"),
+                    "--out", str(tmp_path / "out"), "--processed", str(tmp_path / "processed"),
+                    "--reference-platform", str(ref)])
+    assert not (tmp_path / "out").exists()
