@@ -28,7 +28,15 @@ namespace {
 
 enum class Phase { Offline, Online };
 
-enum FaultKind : unsigned { kNone = 1, kFlipAnswerBit = 2, kWrongRecord = 4, kFlipHintBit = 8 };
+enum FaultKind : unsigned {
+    kNone = 1,
+    kFlipAnswerBit = 2,
+    kWrongRecord = 4,
+    kFlipHintBit = 8,
+    kStaleRecord = 16,
+    kDropServer = 32,
+    kBadProof = 64,
+};
 
 struct FaultSpec {
     const char* name;
@@ -42,8 +50,10 @@ constexpr FaultSpec kFaults[] = {
     {"flip_answer_bit", kFlipAnswerBit, false, true},
     {"wrong_record", kWrongRecord, false, true},
     {"flip_hint_bit", kFlipHintBit, true, true},
+    {"stale_record", kStaleRecord, false, true},
+    {"drop_server", kDropServer, false, true},
+    {"bad_proof", kBadProof, true, false},
 };
-constexpr const char* kLaterFaults[] = {"stale_record", "bad_proof", "drop_server"};
 
 struct ArmSpec {
     const char* name;
@@ -52,12 +62,28 @@ struct ArmSpec {
     bool verifiable() const { return preproc; }
 };
 
-constexpr unsigned kAllFaults = kNone | kFlipAnswerBit | kWrongRecord | kFlipHintBit;
+constexpr unsigned kAllFaults = kNone | kFlipAnswerBit | kWrongRecord | kFlipHintBit | kStaleRecord | kDropServer | kBadProof;
 constexpr ArmSpec kArms[] = {
-    {"S0-cpp", true, false, false, kAllFaults},
+    {"S0-cpp", true, false, false, kAllFaults & ~kBadProof},
     {"S1", false, true, true, kAllFaults},
     {"S2", false, true, false, kAllFaults},
 };
+
+// What the client does after it rejects an answer. retry_same is never allowed (decision 12),
+// and every policy but abort needs an arm whose client can reject.
+enum class Policy { Abort, SwitchReplica, RePreprocess };
+
+struct PolicySpec {
+    const char* name;
+    Policy kind;
+};
+
+constexpr PolicySpec kPolicies[] = {
+    {"abort", Policy::Abort},
+    {"switch_replica", Policy::SwitchReplica},
+    {"re_preprocess", Policy::RePreprocess},
+};
+constexpr uint64_t kRecoveryBudget = 3;  // further attempts after the first rejection
 
 constexpr bool kAllowTrivial = true;  // as full_preproc_pir_test (pir_test.cpp:250)
 constexpr const char* kAnswerKernel = "packed_basis26";
@@ -73,14 +99,18 @@ struct Options {
     uint64_t reps = 0, warmup = 0, seed = 0;
     const FaultSpec* fault = &kFaults[0];
     double fault_prob = 0.0;
-    std::string recovery = "abort", out;
+    const PolicySpec* recovery = &kPolicies[0];
+    bool replicas_cheat = false;
+    std::string out;
 };
 
 constexpr const char* kUsage =
     "usage: vsp-adapter --arm S0-cpp|S1|S2 --db-bytes N --record-bytes N\n"
     "                   --phase offline|online|all --reps N --warmup N --seed N\n"
-    "                   --fault none|flip_answer_bit|wrong_record|flip_hint_bit\n"
-    "                   [--fault-prob F] [--recovery abort] --out PATH.jsonl\n"
+    "                   --fault none|flip_answer_bit|wrong_record|flip_hint_bit|\n"
+    "                           stale_record|drop_server|bad_proof\n"
+    "                   [--fault-prob F] [--recovery abort|switch_replica|re_preprocess]\n"
+    "                   [--replicas-cheat] --out PATH.jsonl\n"
     "\n"
     "Drives VeriSimplePIR (third_party/verisimplepir) and appends one JSON record per\n"
     "repetition and phase to --out. Contract: src/adapters/README.md.\n"
@@ -105,6 +135,10 @@ Options parse_args(int argc, char** argv) {
     bool have_reps = false, have_warmup = false, have_seed = false, have_prob = false;
     for (int i = 1; i < argc; i++) {
         const std::string flag = argv[i];
+        if (flag == "--replicas-cheat") {
+            o.replicas_cheat = true;
+            continue;
+        }
         if (i + 1 >= argc) throw UsageError(flag + " needs a value");
         const std::string v = argv[++i];
         if (flag == "--arm") {
@@ -131,8 +165,6 @@ Options parse_args(int argc, char** argv) {
             o.fault = nullptr;
             for (const auto& f : kFaults)
                 if (v == f.name) o.fault = &f;
-            for (const char* later : kLaterFaults)
-                if (v == later) throw UsageError("--fault " + v + " arrives in P7");
             if (!o.fault) throw UsageError("unknown --fault '" + v + "'");
         } else if (flag == "--fault-prob") {
             char* end = nullptr;
@@ -141,8 +173,12 @@ Options parse_args(int argc, char** argv) {
                 throw UsageError("--fault-prob must be a number in [0, 1]");
             have_prob = true;
         } else if (flag == "--recovery") {
-            if (v != "abort") throw UsageError("--recovery supports only abort until P7 (retry_same is never allowed)");
-            o.recovery = v;
+            o.recovery = nullptr;
+            for (const auto& p : kPolicies)
+                if (v == p.name) o.recovery = &p;
+            if (!o.recovery)
+                throw UsageError("--recovery must be abort, switch_replica or re_preprocess, not '" + v +
+                                 "' (retry_same is never allowed)");
         } else if (flag == "--out") {
             o.out = v;
         } else {
@@ -156,6 +192,8 @@ Options parse_args(int argc, char** argv) {
         throw UsageError("--db-bytes must be a positive multiple of --record-bytes");
     if (!(o.arm->faults & o.fault->kind))
         throw UsageError(std::string(o.arm->name) + " does not support --fault " + o.fault->name);
+    if (o.recovery->kind != Policy::Abort && !o.arm->verifiable())
+        throw UsageError(std::string(o.arm->name) + " never rejects an answer, so it supports only --recovery abort");
     if (o.fault->kind == kWrongRecord && o.db_bytes / o.record_bytes < 2)
         throw UsageError("wrong_record needs at least two records");
     if (!have_prob) o.fault_prob = o.fault->kind == kNone ? 0.0 : 1.0;
@@ -166,6 +204,11 @@ Options parse_args(int argc, char** argv) {
 
 struct Span {
     double wall = 0, cpu = 0;
+    Span& operator+=(const Span& s) {
+        wall += s.wall;
+        cpu += s.cpu;
+        return *this;
+    }
 };
 
 double clock_s(clockid_t c) {
@@ -237,7 +280,23 @@ void release(std::vector<Multi_Limb_Matrix>& v) {
 
 constexpr int kAssertExit = 134;
 
-extern "C" void exit_on_abort(int) { _exit(kAssertExit); }
+// The clock of checks running in a child, in a MAP_SHARED page the parent reads afterwards.
+// The child's SIGABRT handler stops it, so a rejection still has a span.
+struct ChildClock {
+    double wall0, cpu0;
+    Span span;
+    void start() {
+        wall0 = clock_s(CLOCK_MONOTONIC);
+        cpu0 = clock_s(CLOCK_PROCESS_CPUTIME_ID);
+    }
+    void stop() { span = {clock_s(CLOCK_MONOTONIC) - wall0, clock_s(CLOCK_PROCESS_CPUTIME_ID) - cpu0}; }
+};
+ChildClock* g_child_clock = nullptr;
+
+extern "C" void exit_on_abort(int) {
+    if (g_child_clock) g_child_clock->stop();
+    _exit(kAssertExit);
+}
 
 struct Isolated {
     bool aborted;
@@ -295,6 +354,28 @@ std::pair<std::optional<T>, std::string> run_isolated_value(F&& body) {
     std::optional<T> value = r.aborted ? std::nullopt : std::optional<T>(*slot);
     munmap(shared, sizeof(T));
     return {value, std::move(r.output)};
+}
+
+struct Verdict {
+    bool rejected;
+    Span span;  // the checks, up to the rejection when there was one
+};
+
+// Checks that may reject, run in a child: upstream rejects with assert.
+template <class F>
+Verdict verify_isolated(F&& checks) {
+    void* shared = mmap(nullptr, sizeof(ChildClock), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
+    if (shared == MAP_FAILED) throw std::runtime_error("mmap failed");
+    ChildClock* clock = new (shared) ChildClock{};
+    const bool rejected = run_isolated([&] {
+        g_child_clock = clock;
+        clock->start();
+        checks();
+        clock->stop();
+    }).aborted;
+    const Verdict v{rejected, clock->span};
+    munmap(shared, sizeof(ChildClock));
+    return v;
 }
 
 // ---------------------------------------------------------------- randomness
@@ -481,6 +562,22 @@ BitFlip hint_flip_offline(const VeriSimplePIR& pir, Stream& s) {
     return {s.below(pir.ell * LHE::n), ld + unsigned(s.below(64 - ld))};
 }
 
+// bad_proof: any element of the 40 x ell proof (PreprocProve's output), at a bit below its
+// norm bound p*m, so PreprocVerify sees a changed value.
+BitFlip proof_flip(const VeriSimplePIR& pir, Stream& s) {
+    return {s.below(VeriSimplePIR::stat_sec_param * pir.ell), unsigned(s.below(wire_bits(pir).proof))};
+}
+
+// An offline fault: one bit of the hint (flip_hint_bit) or of the proof (bad_proof).
+struct OfflineFlip {
+    FaultKind kind;
+    BitFlip bit;
+};
+
+OfflineFlip offline_flip(const VeriSimplePIR& pir, FaultKind kind, Stream& s) {
+    return {kind, kind == kBadProof ? proof_flip(pir, s) : hint_flip_offline(pir, s)};
+}
+
 // ---------------------------------------------------------------- the scheme
 
 std::unique_ptr<VeriSimplePIR> make_pir(const ArmSpec& arm, const Layout& l) {
@@ -508,15 +605,25 @@ std::pair<std::optional<Layout>, std::string> select_params(const ArmSpec& arm, 
 }
 
 // The database in the library's matrix forms. Built once and never timed, like the
-// database itself: D (ell x m), D^T for the preprocessing, and D packed for Answer.
+// database itself: D (ell x m), D^T for the preprocessing, and D packed for Answer. For
+// stale_record also the stale server's packed database: the same layout over the bytes with
+// every record bit flipped.
 struct ServerDB {
     Matrix D, D_T;
-    std::unique_ptr<PackedMatrix> D_packed;
+    std::unique_ptr<PackedMatrix> D_packed, stale_packed;
 
-    ServerDB(const VeriSimplePIR& pir, const ArmSpec& arm, const Matrix& packed) {
-        D = packed;
+    ServerDB(const VeriSimplePIR& pir, const ArmSpec& arm, const Layout& l, const std::vector<uint8_t>& bytes,
+             bool with_stale) {
+        D = pack_database(pir.dbParams, l, bytes);
         if (arm.preproc) D_T = transpose(D);
         D_packed.reset(new PackedMatrix(packMatrixHardCoded(D, pir.dbParams.p)));
+        if (with_stale) {
+            std::vector<uint8_t> stale(bytes);
+            for (uint8_t& b : stale) b = ~b;
+            Matrix S = pack_database(pir.dbParams, l, stale);
+            stale_packed.reset(new PackedMatrix(packMatrixHardCoded(S, pir.dbParams.p)));
+            release(S);
+        }
     }
     ServerDB(const ServerDB&) = delete;
 };
@@ -543,10 +650,18 @@ struct ClientState {
 struct OfflineMetrics {
     Span public_params, server_preproc;
     std::optional<Span> server_proof;  // S1/S2
-    std::optional<Span> client;        // null when the client's checks ran in a child
+    Span client;                       // 0 for S0-cpp, which has no client offline work
     uint64_t down_bytes = 0, hint_bytes = 0, up_bytes = 0, storage_bytes = 0;
     std::optional<bool> detected;      // verifiable arms
     uint64_t peak_rss_bytes = 0;
+
+    Span total() const {
+        Span s = public_params;
+        s += server_preproc;
+        if (server_proof) s += *server_proof;
+        s += client;
+        return s;
+    }
 };
 
 struct OfflineResult {
@@ -555,7 +670,7 @@ struct OfflineResult {
 };
 
 OfflineResult run_offline(const VeriSimplePIR& pir, const ArmSpec& arm, const ServerDB& db,
-                          std::optional<BitFlip> flip) {
+                          std::optional<OfflineFlip> flip) {
     OfflineResult out;
     OfflineMetrics& r = out.metrics;
     out.state = std::make_unique<ClientState>();
@@ -566,7 +681,7 @@ OfflineResult run_offline(const VeriSimplePIR& pir, const ArmSpec& arm, const Se
     timed(r.server_preproc, [&] { c.H = pir.GenerateHint(c.A, db.D); });
 
     if (!arm.preproc) {
-        r.client = Span{};  // SimplePIR has no client offline work, and no check a bad hint could fail
+        // SimplePIR has no client offline work, and no check a bad hint could fail.
         r.down_bytes = wire_bytes(c.A, w.q) + wire_bytes(c.H, w.q);
         r.hint_bytes = wire_bytes(c.H, w.q);
         r.storage_bytes = c.storage_bytes();
@@ -606,17 +721,20 @@ OfflineResult run_offline(const VeriSimplePIR& pir, const ArmSpec& arm, const Se
             c.Z = pir.PreprocRecoverZ(H2, sks, res);
             pir.VerifyPreprocZ(c.Z, c.A, *c.C, c.H);
         });
-        r.client = client;
         r.detected = false;
     } else {
-        flip->apply(c.H);
-        r.detected = run_isolated([&] {
+        Matrix& message = flip->kind == kBadProof ? proof : c.H;
+        flip->bit.apply(message);
+        const Verdict v = verify_isolated([&] {
             pir.PreprocVerify(A2, H2, client_hash, cts, res, proof);
             Matrix Z = pir.PreprocRecoverZ(H2, sks, res);
             pir.VerifyPreprocZ(Z, c.A, *c.C, c.H);
-        }).aborted;
-        flip->apply(c.H);
+        });
+        flip->bit.apply(message);
+        client += v.span;
+        r.detected = v.rejected;
     }
+    r.client = client;
 
     r.down_bytes = wire_bytes(c.A, w.q) + wire_bytes(c.H, w.q) + wire_bytes(A2, w.multi_limb) +
                    wire_bytes(H2, w.multi_limb) + wire_bytes(res, w.multi_limb) + wire_bytes(proof, w.proof);
@@ -638,7 +756,7 @@ OfflineResult run_offline(const VeriSimplePIR& pir, const ArmSpec& arm, const Se
 // MB inside the library (multilimb_lhe.cpp:14-17; Matrix has no destructor), and the leak
 // dies with the child. The peak RSS is the child's.
 OfflineMetrics run_offline_isolated(const VeriSimplePIR& pir, const ArmSpec& arm, const ServerDB& db,
-                                    std::optional<BitFlip> flip) {
+                                    std::optional<OfflineFlip> flip) {
     auto [m, output] = run_isolated_value<OfflineMetrics>([&] {
         OfflineMetrics r = run_offline(pir, arm, db, flip).metrics;
         r.peak_rss_bytes = peak_rss_bytes();
@@ -668,11 +786,22 @@ std::vector<uint64_t> truth_of(const Layout& l, const std::vector<uint8_t>& byte
     return std::vector<uint64_t>(first, first + l.record_bytes);
 }
 
+// One query and its answer. Trivially copyable, because a re_preprocess attempt runs it in a
+// forked child and returns it through shared memory.
 struct QueryResult {
     Span query_gen, answer;
     std::optional<Span> verify, recover;
     uint64_t up_bytes = 0, down_bytes = 0;
     std::optional<bool> correct, detected;
+
+    bool accepted() const { return correct.has_value(); }  // the client decodes only what it accepts
+    Span total() const {
+        Span s = query_gen;
+        s += answer;
+        for (const auto& part : {verify, recover})
+            if (part) s += *part;
+        return s;
+    }
 };
 
 struct QueryChecks {
@@ -689,10 +818,18 @@ QueryResult run_query(const VeriSimplePIR& pir, const ArmSpec& arm, const Layout
     timed(r.query_gen, [&] { ct_sk = pir.Query(c.A, l.entry(record, 0)); });
     Matrix& ct = ct_sk.first;
     Matrix& sk = ct_sk.second;
+    r.up_bytes = wire_bytes(ct, w.q);
 
     Matrix ans;
     timed(r.answer, [&] { ans = pir.Answer(ct, *db.D_packed); });
-    r.up_bytes = wire_bytes(ct, w.q);
+    if (fault == kDropServer) {
+        // The server withholds its answer, and the client counts the missing answer as a rejection.
+        if (arm.verifiable()) r.detected = true;
+        release(ans);
+        release(ct);
+        release(sk);
+        return r;
+    }
     r.down_bytes = wire_bytes(ans, w.q);
 
     const std::vector<uint64_t> truth = truth_of(l, bytes, record);
@@ -715,6 +852,9 @@ QueryResult run_query(const VeriSimplePIR& pir, const ArmSpec& arm, const Layout
         ans = pir.Answer(ct2, *db.D_packed);
         release(ct2);
         release(sk2);
+    } else if (fault == kStaleRecord) {
+        release(ans);
+        ans = pir.Answer(ct, *db.stale_packed);
     } else if (fault == kFlipHintBit) {
         hint_flip = hint_flip_for_query(pir, l, c.H, sk, record, faults);
         hint_flip->apply(c.H);
@@ -726,23 +866,21 @@ QueryResult run_query(const VeriSimplePIR& pir, const ArmSpec& arm, const Layout
     if (arm.verifiable()) {
         if (fault) {
             // A client checks every hint it accepts against Z (VerifyPreprocZ) before using it.
-            r.detected = run_isolated([&] {
+            const Verdict v = verify_isolated([&] {
                 if (hint_flip) pir.VerifyPreprocZ(c.Z, c.A, *c.C, c.H);
                 pir.PreVerify(ct, ans, c.Z, *c.C);
-            }).aborted;
+            });
+            r.verify = v.span;
+            r.detected = v.rejected;
         } else {
-            Span v;
-            timed(v, [&] { pir.PreVerify(ct, ans, c.Z, *c.C); });
-            r.verify = v;
+            timed(r.verify.emplace(), [&] { pir.PreVerify(ct, ans, c.Z, *c.C); });
             r.detected = false;
         }
     }
 
     if (!r.detected.value_or(false)) {
         std::vector<uint64_t> got;
-        Span rec;
-        timed(rec, [&] { got = decode_record(pir, l, c.H, ans, sk, record); });
-        r.recover = rec;
+        timed(r.recover.emplace(), [&] { got = decode_record(pir, l, c.H, ans, sk, record); });
         r.correct = got == truth;
     }
 
@@ -751,6 +889,75 @@ QueryResult run_query(const VeriSimplePIR& pir, const ArmSpec& arm, const Layout
     release(sk);
     release(ans);
     return r;
+}
+
+std::optional<FaultKind> fault_if(const Options& o, bool faulted) {
+    return faulted ? std::optional(o.fault->kind) : std::nullopt;
+}
+
+enum class Outcome { Accepted, Recovered, Aborted, SilentWrong };
+constexpr const char* kOutcomeNames[] = {"accepted", "recovered", "aborted", "silent_wrong"};  // Outcome's order
+
+// What the client did after its first answer (src/adapters/README.md, "Recovery").
+struct Recovery {
+    Outcome outcome = Outcome::Accepted;
+    uint64_t attempts = 0;
+    Span span;  // every further attempt's scheme calls, the offline phase included for re_preprocess
+    uint64_t up_bytes = 0, down_bytes = 0;
+};
+
+// A re_preprocess attempt: a whole offline phase, then a query. Trivially copyable, because it
+// runs in a forked child and returns through shared memory.
+struct Reprocessed {
+    OfflineMetrics offline;
+    QueryResult query;
+};
+
+// After a rejected first answer, the policy's further attempts. Each attempt's server is
+// faulted with probability --fault-prob, except an honest replica, which never is. A
+// re_preprocess attempt runs in a child, because each offline phase leaks tens of MiB in the
+// library and its child's state is thrown away anyway. Its fault choices come from a stream
+// seeded from the fault stream, so the parent's stream advances the same on every run.
+Recovery run_recovery(const Options& o, const VeriSimplePIR& pir, const Layout& l, const ServerDB& db,
+                      ClientState& c, const std::vector<uint8_t>& bytes, uint64_t record, Stream& faults,
+                      const QueryResult& first) {
+    Recovery rec;
+    if (first.accepted()) {
+        rec.outcome = *first.correct ? Outcome::Accepted : Outcome::SilentWrong;
+        return rec;
+    }
+    rec.outcome = Outcome::Aborted;
+    const ArmSpec& arm = *o.arm;
+    while (o.recovery->kind != Policy::Abort && rec.attempts < kRecoveryBudget) {
+        rec.attempts++;
+        QueryResult q;
+        if (o.recovery->kind == Policy::SwitchReplica) {
+            const bool faulted = o.replicas_cheat && faults.unit() < o.fault_prob;
+            q = run_query(pir, arm, l, db, c, bytes, record, faults, fault_if(o, faulted), QueryChecks{});
+        } else {
+            const bool faulted = faults.unit() < o.fault_prob;
+            const uint64_t attempt_seed = faults.next();
+            auto [attempt, output] = run_isolated_value<Reprocessed>([&] {
+                Stream attempt_faults(attempt_seed, kFault);
+                OfflineResult fresh = run_offline(pir, arm, db, std::nullopt);
+                return Reprocessed{fresh.metrics, run_query(pir, arm, l, db, *fresh.state, bytes, record, attempt_faults,
+                                                            fault_if(o, faulted), QueryChecks{})};
+            });
+            if (!attempt) throw std::runtime_error("re_preprocess attempt aborted: " + output);
+            rec.span += attempt->offline.total();
+            rec.up_bytes += attempt->offline.up_bytes;
+            rec.down_bytes += attempt->offline.down_bytes;
+            q = attempt->query;
+        }
+        rec.span += q.total();
+        rec.up_bytes += q.up_bytes;
+        rec.down_bytes += q.down_bytes;
+        if (q.accepted()) {
+            rec.outcome = *q.correct ? Outcome::Recovered : Outcome::SilentWrong;
+            break;
+        }
+    }
+    return rec;
 }
 
 // ---------------------------------------------------------------- records
@@ -762,9 +969,10 @@ void put_span(Json::Fields& f, const std::string& name, const std::optional<Span
     f.emplace_back(name + "_cpu_s", s ? num(s->cpu) : Json::null());
 }
 
-// Every record carries every metric key; the other phase's are null. An offline record's
-// peak RSS is its child's; an online record's is this process's.
-Json metrics(Phase phase, const OfflineMetrics* off, const QueryResult* on) {
+// Every record carries every metric key; the other phase's are null, and so are the recovery
+// metrics unless a further attempt was made. An offline record's peak RSS is its child's; an
+// online record's is this process's.
+Json metrics(Phase phase, const OfflineMetrics* off, const QueryResult* on, const Recovery* rec) {
     const auto span = [](const OfflineMetrics* r, Span OfflineMetrics::*m) {
         return r ? std::optional<Span>(r->*m) : std::nullopt;
     };
@@ -774,7 +982,7 @@ Json metrics(Phase phase, const OfflineMetrics* off, const QueryResult* on) {
     put_span(f, "public_params", span(off, &OfflineMetrics::public_params));
     put_span(f, "server_preproc", span(off, &OfflineMetrics::server_preproc));
     put_span(f, "server_preproc_proof", off ? off->server_proof : std::nullopt);
-    put_span(f, "client_offline", off ? off->client : std::nullopt);
+    put_span(f, "client_offline", span(off, &OfflineMetrics::client));
     f.emplace_back("offline_down_bytes", integer(off, off ? off->down_bytes : 0));
     f.emplace_back("offline_down_bytes_hint_only", integer(off, off ? off->hint_bytes : 0));
     f.emplace_back("offline_up_bytes", integer(off, off ? off->up_bytes : 0));
@@ -789,6 +997,10 @@ Json metrics(Phase phase, const OfflineMetrics* off, const QueryResult* on) {
     put_span(f, "client_recover", on ? on->recover : std::nullopt);
     put_span(f, "client_verify", on ? on->verify : std::nullopt);
     f.emplace_back("verify_fused", phase == Phase::Online ? Json::boolean(false) : Json::null());
+    const bool retried = rec && rec->attempts > 0;
+    put_span(f, "recovery", retried ? std::optional<Span>(rec->span) : std::nullopt);
+    f.emplace_back("recovery_up_bytes", integer(retried, retried ? rec->up_bytes : 0));
+    f.emplace_back("recovery_down_bytes", integer(retried, retried ? rec->down_bytes : 0));
     f.emplace_back("process_peak_rss_bytes", Json::integer(off ? off->peak_rss_bytes : peak_rss_bytes()));
     return Json::object(f);
 }
@@ -889,6 +1101,7 @@ struct Record {
     std::string status = "ok";
     Json metrics = Json::null(), analytical = Json::null();
     std::optional<bool> correct, detected;
+    std::optional<Recovery> recovery;  // online records of a supported run
     std::optional<std::string> error;
 
     std::string to_json() const {
@@ -913,7 +1126,10 @@ struct Record {
             {"fault", Json::string(o.fault->name)},
             {"fault_prob", num(o.fault_prob)},
             {"faulted", Json::boolean(faulted)},
-            {"recovery", Json::string(o.recovery)},
+            {"recovery", Json::string(o.recovery->name)},
+            {"recovery_outcome",
+             recovery ? Json::string(kOutcomeNames[static_cast<int>(recovery->outcome)]) : Json::null()},
+            {"recovery_attempts", recovery ? Json::integer(recovery->attempts) : Json::null()},
             {"status", Json::string(status)},
             {"metrics", metrics},
             {"analytical", analytical},
@@ -955,7 +1171,7 @@ void write_unsupported(const Options& o, const std::string& why, Sink& sink) {
             r.phase = phase;
             r.rep = rep;
             r.status = "unsupported_params";
-            r.metrics = metrics(phase, nullptr, nullptr);
+            r.metrics = metrics(phase, nullptr, nullptr, nullptr);
             r.error = why;
             sink.write(r);
         }
@@ -980,7 +1196,7 @@ int run(const Options& o) {
     const Layout& l = *layout;
     const auto pir = make_pir(arm, l);
     const std::vector<uint8_t> bytes = database_bytes(o.db_bytes, o.seed);
-    const ServerDB db(*pir, arm, pack_database(pir->dbParams, l, bytes));
+    const ServerDB db(*pir, arm, l, bytes, o.fault->kind == kStaleRecord);
     const Json params = scheme_params(arm, o, l, pir.get()), sizes = analytical(arm, pir->dbParams);
     Stream index_stream(o.seed, kIndex), fault_stream(o.seed, kFault);
 
@@ -990,10 +1206,10 @@ int run(const Options& o) {
             r.phase = Phase::Offline;
             r.rep = rep;
             r.faulted = draw_faulted(o, Phase::Offline, fault_stream);
-            const std::optional<BitFlip> flip =
-                r.faulted ? std::optional(hint_flip_offline(*pir, fault_stream)) : std::nullopt;
+            const std::optional<OfflineFlip> flip =
+                r.faulted ? std::optional(offline_flip(*pir, o.fault->kind, fault_stream)) : std::nullopt;
             const OfflineMetrics m = run_offline_isolated(*pir, arm, db, flip);
-            r.metrics = metrics(Phase::Offline, &m, nullptr);
+            r.metrics = metrics(Phase::Offline, &m, nullptr, nullptr);
             r.analytical = sizes;
             r.detected = m.detected;
             sink.write(r);
@@ -1010,12 +1226,12 @@ int run(const Options& o) {
             r.rep = rep;
             const uint64_t record = index_stream.below(l.records);
             r.faulted = draw_faulted(o, Phase::Online, fault_stream);
-            const std::optional<FaultKind> fault = r.faulted ? std::optional(o.fault->kind) : std::nullopt;
-            const bool check = fault && *fault != kWrongRecord && !effect_checked;
+            const bool check = r.faulted && (o.fault->kind & (kFlipAnswerBit | kFlipHintBit)) && !effect_checked;
             effect_checked |= check;
-            const QueryResult q = run_query(*pir, arm, l, db, *state, bytes, record, fault_stream, fault,
-                                            {check, /*upstream_recover=*/rep == 0});
-            r.metrics = metrics(Phase::Online, nullptr, &q);
+            const QueryResult q = run_query(*pir, arm, l, db, *state, bytes, record, fault_stream,
+                                            fault_if(o, r.faulted), {check, /*upstream_recover=*/rep == 0});
+            r.recovery = run_recovery(o, *pir, l, db, *state, bytes, record, fault_stream, q);
+            r.metrics = metrics(Phase::Online, nullptr, &q, &*r.recovery);
             r.analytical = sizes;
             r.correct = q.correct;
             r.detected = q.detected;

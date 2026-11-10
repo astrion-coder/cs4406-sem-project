@@ -10,7 +10,7 @@ make -C src/adapters/vsp_cpp
 
 This needs the already-built `third_party/verisimplepir/bin/lib/libverisimplepir.dylib` and does not rebuild it. It compiles with Homebrew LLVM `clang++ -std=c++17 -O3` and the same include and link flags as upstream's demo binaries, so the adapter shares the library's libc++ ABI. It never defines `NDEBUG`, because upstream's header asserts must stay live. It embeds `git -C third_party/verisimplepir rev-parse HEAD` as `upstream_sha`, and rebuilds when that commit changes.
 
-The dylib's install name is the relative path `bin/lib/libverisimplepir.dylib`, which dyld resolves against the working directory. The build rewrites this one reference in the adapter binary to `@rpath/libverisimplepir.dylib`, with the rpath `@executable_path/../../third_party/verisimplepir/bin/lib`. The binary then runs from any directory with no `DYLD_LIBRARY_PATH`. `third_party/` is not touched.
+The dylib's install name is the relative path `bin/lib/libverisimplepir.dylib`, which dyld resolves against the working directory. The build rewrites this one reference in the adapter binary to `@rpath/libverisimplepir.dylib`, with the rpath `@executable_path/../../third_party/verisimplepir/bin/lib`. The binary then runs from any directory with no `DYLD_LIBRARY_PATH`. `third_party/` is not touched. `make -C src/adapters/vsp_cpp OUT=<path>` builds elsewhere, and the rpath resolves when `<path>` is two levels below the repository root, as `build/adapters/vsp-adapter` is.
 
 ## Arms
 
@@ -53,9 +53,12 @@ Decoding (`decode_record`) runs the body of `VeriSimplePIR::Recover` (`preproc_p
 | `server_preproc_proof_s` | `PreprocAnswer`, `PreprocProve` |
 | `client_offline_s` | S1 and S2: the client's own `HashAandH`, `PreprocSampleC`, `PreprocClientMessage`, `PreprocVerify`, `PreprocRecoverZ`, `VerifyPreprocZ`. 0 for S0-cpp |
 | `query_gen_s` | `Query` |
-| `server_answer_s` | `Answer` |
-| `client_verify_s` | `PreVerify` (S1 and S2), null for S0-cpp |
+| `server_answer_s` | `Answer`, also when `drop_server` then withholds the answer |
+| `client_verify_s` | `PreVerify` (S1 and S2), preceded by `VerifyPreprocZ` in a faulted online `flip_hint_bit` repetition. Null for S0-cpp |
 | `client_recover_s` | `decode_record`: one `lhe.decrypt`, then `dbParams.recover` for each of the record's entries |
+| `recovery_s` | see "Recovery" |
+
+In a faulted repetition the client's checks run in a child (see "Isolation"). The child starts a clock in a shared page before the checks and stops it when they return, or in its `SIGABRT` handler when upstream rejects. So `client_verify_s` and `client_offline_s` cover the checks up to the rejection, without the fork.
 
 The client hashes `A_2` and `H_2` itself, because it cannot take the Fiat-Shamir hash from the server.
 
@@ -95,27 +98,47 @@ Decoding computes `pt = round((ans - H sk) / Delta)`, where `Delta = q/p` is a p
 - `flip_hint_bit`, online. `H[row][col]` enters decoding multiplied by `sk[col] = 2^t * odd`. In a row of the chosen entry and a random column, the adapter flips hint bit `log2(Delta) + j - t` for a random record digit bit `j >= t`. That bit is also at or above `log2(q/p)`, and the record's digit moves by `2^j * odd`. The corrupted hint is used for that repetition only, and is then restored.
 - `flip_hint_bit`, offline. No query exists yet, so the adapter flips a random bit at or above `log2(Delta)` in any element of `H`.
 - `wrong_record`. The adapter replaces the answer with the honest `Answer` to a fresh `Query` for a different random record.
+- `stale_record`. The stale server is a second packed database: `pack_database` over the same `Layout`, from the database bytes with every bit flipped (the padding stays zero), packed with `packMatrixHardCoded`. It is built once per run, untimed, and only for this fault. It answers the client's own query with upstream's `Answer`. The client's hint still matches the current database, so decoding yields noise rather than the flipped record. As for `wrong_record`, `server_answer_s` times the honest server's `Answer`, which is the same kernel at the same size.
+- `drop_server`. These arms have one server, so it is the one that withholds its answer. The server computes the answer with `Answer` and never sends it. The record has `server_answer_s` timed, `down_bytes` 0 and `correct` null, and the client counts the missing answer as a rejection.
+- `bad_proof` (S1 and S2, offline). The proof `PreprocProve` returns is a 40 x ell matrix whose entries lie below `PreprocVerify`'s norm bound `p*m`. The adapter flips bit `b` of a random entry, for a random `b` below `bits(p*m - 1)` (`wire_bits_proof`). The entry then either reaches `p*m` or more, which the norm check rejects, or moves by `2^b`. That adds `2^b` times a row of the random `A_2` to a row of `Z A_2`, which `PreprocVerify` compares with `C H_2` modulo `q*kappa`.
 
 On the first faulted repetition of `flip_answer_bit` or `flip_hint_bit`, the adapter decodes the faulted answer with `decode_record` and exits 1 if the record did not change.
 
 How each arm reports a fault:
 
-- S0-cpp has no checks. An online fault shows as `correct=false` with `detected=null`. An offline `flip_hint_bit` record shows only `faulted=true`, because no client check exists for it to fail.
-- S1 and S2, online answer faults. `PreVerify` runs in a forked child.
+- S0-cpp has no checks. An online fault shows as `correct=false` with `detected=null`, except `drop_server`, where nothing is decoded and `correct=null`. An offline `flip_hint_bit` record shows only `faulted=true`, because no client check exists for it to fail. S0-cpp does not take `bad_proof`, because it has no proof.
+- S1 and S2, online answer faults (`flip_answer_bit`, `wrong_record`, `stale_record`). `PreVerify` runs in a forked child.
 - S1 and S2, online `flip_hint_bit`. The child runs `VerifyPreprocZ` on the corrupted hint, because a client checks every hint it accepts against `Z`, and then `PreVerify`.
-- S1 and S2, offline `flip_hint_bit`. The child runs `PreprocVerify`, `PreprocRecoverZ` and `VerifyPreprocZ` with the corrupted hint.
+- S1 and S2, `drop_server`. Nothing is verified. `detected=true`, because the missing answer is a rejection.
+- S1 and S2, offline `flip_hint_bit` and `bad_proof`. The child runs `PreprocVerify`, `PreprocRecoverZ` and `VerifyPreprocZ` with the corrupted hint or proof.
 
-When the child aborts, `detected=true` and `correct=null`, because nothing was recovered. When it exits cleanly, `detected=false`, and the parent runs `decode_record` to set `correct`. Faulted repetitions record null for the verification timings, because those ran in the child. Honest repetitions never fork.
+When the child aborts, `detected=true` and `correct=null`, because nothing was recovered. When it exits cleanly, `detected=false`, and the parent runs `decode_record` to set `correct`. Honest repetitions never fork.
+
+## Recovery
+
+S0-cpp never rejects an answer, so it takes only `--recovery abort`, and its outcome is `accepted` or `silent_wrong`, or `aborted` for `drop_server`. S1 and S2 take `abort`, `switch_replica` and `re_preprocess`. After a rejected first answer, `run_recovery` makes at most 3 further attempts for the same record and stops at the first one the client accepts. `correct` and `detected` still describe the first answer.
+
+- `switch_replica`. A replica holds the same database, and upstream's `Answer` is a deterministic function of the database and the query, so the run's honest server objects serve it. Each attempt is a fresh `Query` from the client's existing state. Without `--replicas-cheat` the replica is honest, so the first attempt recovers. With it, each attempt is faulted with probability `--fault-prob`, drawn from the fault stream, in the same way as the first answer: another bit flip, another wrong record, the stale database, or no answer. `--replicas-cheat` has no effect under the other policies. An attempt runs in this process, and only a faulted attempt's checks fork.
+- `re_preprocess`. Each attempt runs in a forked child: the whole offline phase (`run_offline`, the calls an offline record times) against the same server objects, then a fresh query from the new client state. The offline phase is honest, because every fault with a recovery is an online fault. The query is faulted with probability `--fault-prob`. The child hands its offline metrics and its query result back through a `MAP_SHARED` page and exits, so the library's leak of tens of MiB per offline phase dies with it. The new client state dies with it too, and the next repetition starts from the run's one offline state. The parent draws whether the attempt is faulted and a seed for the child's own fault choices, so its fault stream advances the same way on every run.
+
+In an online `flip_hint_bit` run, a faulted attempt corrupts the hint for that attempt, as a faulted first answer does, and an honest replica's attempt uses the honest hint. A `switch_replica` attempt counts no hint download, as the first answer counts none.
+
+| Metric | What it sums over the further attempts |
+|---|---|
+| `recovery_s`, `recovery_cpu_s` | each attempt's `Query`, `Answer`, checks and `decode_record` spans, plus for `re_preprocess` the offline phase's `public_params`, `server_preproc`, `server_preproc_proof` and `client_offline` spans. Forking, waiting and bookkeeping are not counted. |
+| `recovery_up_bytes` | each attempt's `ct`, plus for `re_preprocess` the offline phase's `offline_up_bytes` |
+| `recovery_down_bytes` | each attempt's `ans`, 0 when it was withheld, plus for `re_preprocess` the offline phase's `offline_down_bytes`. Under `drop_server` with `switch_replica --replicas-cheat`, every attempt is withheld, so this is 0 |
 
 ## Isolation
 
-Upstream reports a bad parameter set or a failed check with `assert(false)`, which aborts the process. `run_isolated` forks. The child sends its stdout and stderr into a pipe and turns `SIGABRT` into `_exit(134)`, which also keeps macOS from writing a crash report. The parent reads the pipe and classifies the exit. `run_isolated_value` also hands a value back through a `MAP_SHARED` mapping. Three kinds of step run in a child:
+Upstream reports a bad parameter set or a failed check with `assert(false)`, which aborts the process. `run_isolated` forks. The child sends its stdout and stderr into a pipe and turns `SIGABRT` into `_exit(134)`, which also keeps macOS from writing a crash report. The parent reads the pipe and classifies the exit. `run_isolated_value` also hands a value back through a `MAP_SHARED` mapping. Four kinds of step run in a child:
 
 1. Layout and parameter selection: `plan_layout`, the constructor (`computeParams`, `checkSISHardness`), `check_layout`, and the packed kernel's width check (`packMatrixHardCoded`, at most 26 bits). A rejection here writes every requested record with `status="unsupported_params"` and the message as `error`.
 2. Every timed offline repetition (`run_offline_isolated`). Upstream's `Matrix` has no destructor (`mat.h`, commented out), and the multi-limb `matMul`, `matMulVec` and `matMulLeftBinary` allocate both result limbs and then overwrite them (`multilimb_lhe.cpp:14-17`). One S1 offline phase at 1 MiB therefore leaks about 33 MiB, which would reach gigabytes over 100 repetitions in one process. The child does the timed calls, returns the record's fields and its own peak RSS, and exits, so the leak dies with it. The fault bit for a faulted repetition is drawn in the parent, so the fault stream stays deterministic. The online phase's untimed setup runs once in the parent.
-3. Every fault-injected verification.
+3. Every fault-injected verification (`verify_isolated`), which times itself (see "What each timer covers").
+4. Every `re_preprocess` attempt, for the same leak as item 2 (see "Recovery").
 
 ## Known limits
 
 - **Padding at small databases with long records.** See "Sizes and data". `padding_factor` in `scheme_params` says how much larger the library's database is than `db_bytes`.
-- **Online repetitions leak a little.** They run in the parent, as the contract has them. The library's temporaries in `Query`, `Answer`, `decrypt` and `PreVerify` are never freed, and peak RSS grows by about 44 KiB per S1 online repetition at 1 MiB. These temporaries are vectors of length `m` or `ell`, so the growth scales with the square root of the database size.
+- **Online repetitions leak a little.** They run in the parent, as the contract has them, and so do `switch_replica` attempts. The library's temporaries in `Query`, `Answer`, `decrypt` and `PreVerify` are never freed, and peak RSS grows by about 44 KiB per S1 online repetition at 1 MiB. These temporaries are vectors of length `m` or `ell`, so the growth scales with the square root of the database size.
