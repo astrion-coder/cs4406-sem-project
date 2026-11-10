@@ -152,8 +152,13 @@
       "allOf": [
         {
           "if": {"properties": {"mode": {"const": "client"}}, "required": ["mode"]},
-          "then": {"properties": {"metrics": {"required": ["rtt_s", "rtt_cpu_s"]}}},
+          "then": {},
           "else": {"properties": {"metrics": {"not": {"anyOf": [{"required": ["rtt_s"]}, {"required": ["rtt_cpu_s"]}]}}}}
+        },
+        {
+          "description": "A client row that rejected its parameters never connected, so it has no round trip.",
+          "if": {"properties": {"mode": {"const": "client"}, "status": {"const": "ok"}}, "required": ["mode", "status"]},
+          "then": {"properties": {"metrics": {"required": ["rtt_s", "rtt_cpu_s"]}}}
         },
         {
           "if": {"properties": {"arm": {"enum": ["S3", "S4"]}}},

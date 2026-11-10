@@ -15,7 +15,7 @@ PINS := \
 	verisimplepir,https://github.com/leodec/verisimplepir,3643bb7cbaae02da98a195c4d004d4d083e3ab88 \
 	apir-code,https://github.com/dedis/apir-code,35cabd62fb898926f5bea6035caeae39091e091d
 
-.PHONY: setup patch build adapters test conformance recovery sysinfo smoke bench analyse figures
+.PHONY: setup patch build adapters test conformance recovery sysinfo smoke bench analyse figures netem session-check
 
 setup:
 	for pin in $(PINS); do \
@@ -102,3 +102,11 @@ analyse:
 
 figures:
 	uv run python -m cs4406_sem_project.analysis.plots $(RUNS_ARGS) --out results/figures
+
+# RQ3b and RQ3a (task SG-6). Bring the link up first: sudo src/cs4406_sem_project/harness/dummynet.sh up <profile>
+# then calibrate it (gate G4). PROFILE=none runs the loopback baseline. RUN_ID groups every profile of one run.
+netem: adapters
+	uv run python -m cs4406_sem_project.harness.netem --profile $(or $(PROFILE),$(error set PROFILE=lan|broadband|mobile|none)) --run-id $(or $(RUN_ID),$(error set RUN_ID=<p6 run id>))
+
+session-check: adapters
+	uv run python -m cs4406_sem_project.harness.session_check --grid-run $(or $(GRID_RUN),$(error set GRID_RUN=<grid run id>)) --run-id $(or $(RUN_ID),$(error set RUN_ID=<p6 run id>))

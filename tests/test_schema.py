@@ -90,6 +90,13 @@ def test_client_row_needs_rtt():
     assert _errors(row)
 
 
+def test_unsupported_client_row_needs_no_rtt():
+    row = _base("S1", "online", mode="client")
+    del row["metrics"]["rtt_s"], row["metrics"]["rtt_cpu_s"]
+    row.update(status="unsupported_params", error="no suitable params", correct=None)
+    assert _errors(row) == []
+
+
 def test_one_bit_arm_has_null_record_bytes():
     row = _base("S3", "online")
     row["record_bytes"] = 32
