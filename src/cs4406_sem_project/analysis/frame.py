@@ -99,3 +99,29 @@ def load_runs(run_dirs: Iterable[Path], reference_platform: str) -> tuple[pd.Dat
         for r in rows if validate.kind(r) in ("adapter", "failure") and r["status"] != "ok"
     ]).drop_duplicates()
     return rows_to_frame(rows), status
+
+
+SESSION_COMPARISON = "comparison.json"
+
+
+def load_session(session_dir: Path, reference_platform: str) -> pd.DataFrame | None:
+    """session_check.py's comparison of measured and computed totals, or None before it has run.
+    The session's own rows go through the checks load_runs applies, so a foreign run is refused."""
+    read_rows(run_files(session_dir), reference_platform)
+    path = session_dir / SESSION_COMPARISON
+    if not path.exists():
+        return None
+    table = pd.DataFrame(json.loads(path.read_text())["rows"])
+    for col in ("computed", "measured", "rel_diff"):
+        table[col] = pd.to_numeric(table[col], errors="coerce")
+    return table
+
+
+def load_netem(netem_dir: Path, reference_platform: str) -> pd.DataFrame:
+    """netem.py's client rows, one subdirectory per profile; the profile is in the path, not the rows."""
+    parts = []
+    for d in sorted(p for p in netem_dir.iterdir() if p.is_dir()):
+        df, _status = load_runs([d], reference_platform)
+        if not df.empty:
+            parts.append(df.assign(profile=d.name))
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()

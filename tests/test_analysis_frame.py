@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from cs4406_sem_project.analysis import frame, synthetic
+from cs4406_sem_project.analysis import amortise, frame, synthetic
 from cs4406_sem_project.harness import grid, validate
 
 TIER1 = grid.expand(grid.load(), "tier1")
@@ -62,3 +62,44 @@ def test_load_runs_refuses_other_platforms(tmp_path):
     assert len(df) == cell.reps and status.empty
     with pytest.raises(frame.RefusedRows, match="reference platform"):
         frame.load_runs([tmp_path], "arm64-darwin-Apple M1 Pro")
+
+
+FOCUS = grid.expand(grid.load(), "focus")
+
+
+def _write(run_dir, rows_by_cell):
+    run_dir.mkdir(parents=True)
+    for cell_id, rows in rows_by_cell.items():
+        (run_dir / f"{cell_id}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+
+def test_synthetic_client_rows_validate_as_client_rows():
+    cell = next(c for c in FOCUS if c.arm == "M1" and c.phase == "online")
+    rows = synthetic.client_rows_for(cell, amortise.load_profiles()["mobile"])
+    assert [p for r in rows for p in validate.check_row(r, reference_platform=synthetic.PLATFORM)] == []
+    assert all(r["mode"] == "client" and len(r["metrics"]["rtt_s"]) == 2 for r in rows)
+
+
+def test_load_netem_takes_the_profile_from_the_path(tmp_path):
+    cell = next(c for c in FOCUS if c.arm == "S1" and c.phase == "online")
+    for name in ("lan", "mobile"):
+        prof = amortise.load_profiles()[name]
+        _write(tmp_path / "netem" / name, {cell.cell_id: synthetic.client_rows_for(cell, prof)})
+    df = frame.load_netem(tmp_path / "netem", synthetic.PLATFORM)
+    assert sorted(df.profile.unique()) == ["lan", "mobile"]
+    assert (df["mode"] == "client").all() and df.rtt_s_max.notna().all()
+    with pytest.raises(frame.RefusedRows, match="reference platform"):
+        frame.load_netem(tmp_path / "netem", "arm64-darwin-Apple M1 Pro")
+
+
+def test_load_session_reads_the_comparison_and_checks_the_rows(tmp_path):
+    cell = next(c for c in FOCUS if c.arm == "S1")
+    _write(tmp_path / "session", {cell.cell_id: synthetic.rows_for(cell)})
+    assert frame.load_session(tmp_path / "session", synthetic.PLATFORM) is None
+    (tmp_path / "session" / "comparison.json").write_text(json.dumps({"rows": [
+        {"arm": "S1", "db_bytes": 1, "record_bytes": 1, "q": 100, "quantity": "bytes", "computed": 2.0,
+         "measured": None, "rel_diff": None, "flagged": False, "note": "incomplete"}]}))
+    table = frame.load_session(tmp_path / "session", synthetic.PLATFORM)
+    assert table.computed.item() == 2.0 and table.measured.isna().all()
+    with pytest.raises(frame.RefusedRows, match="reference platform"):
+        frame.load_session(tmp_path / "session", "arm64-darwin-Apple M1 Pro")

@@ -4,7 +4,8 @@ The cost model below is invented. Its numbers are not estimates of any scheme an
 figure or claim: every row carries platform "synthetic", which the reference-platform check refuses.
 What the model does guarantee is a known answer. Each verifiable arm's online server time is exactly
 TRUE_SERVER_OVERHEAD times its baseline's before noise, so tests can check that the analysis
-recovers a planted ratio.
+recovers a planted ratio. Likewise each emulated-link client row's end-to-end latency is
+TRUE_EMULATION_FACTOR[profile] times the noise-free modelled latency (amortise.latency_e2e) of its cell.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from cs4406_sem_project.analysis import amortise
 from cs4406_sem_project.harness.grid import Cell
 from cs4406_sem_project.harness.validate import ADAPTER_OF, BASELINE_ARMS, FUSED_ARMS, TWO_SERVER_ARMS
 
@@ -50,6 +52,7 @@ BASELINE_OF = {"S1": "S0-cpp", "S2": "S0-cpp", "M1": "M0"}
 TRUE_SERVER_OVERHEAD = {v: MODELS[v].answer_s_per_gib / MODELS[b].answer_s_per_gib for v, b in BASELINE_OF.items()}
 GIB = 1 << 30
 NOISE_SIGMA = 0.03
+TRUE_EMULATION_FACTOR = {"lan": 1.6, "broadband": 1.3, "mobile": 1.15}  # invented, per network profile
 
 
 def _online_bytes(cell: Cell) -> tuple[list[int], list[int]]:
@@ -119,3 +122,29 @@ def rows_for(cell: Cell, *, run_id: str = "synthetic", seed: int = 0) -> list[di
 
 def rows_for_cells(cells: Iterable[Cell], *, run_id: str = "synthetic", seed: int = 0) -> list[dict]:
     return [r for c in cells for r in rows_for(c, run_id=run_id, seed=seed)]
+
+
+def modelled_latency(cell: Cell, profile: amortise.Profile) -> float:
+    """amortise.latency_e2e of the cost model above without noise."""
+    m = MODELS[cell.arm]
+    up, down = _online_bytes(cell)
+    return amortise.latency_e2e({
+        "query_gen_s": m.query_gen_s, "up_bytes": sum(up), "server_online_s": m.answer_s_per_gib * cell.db_bytes / GIB,
+        "down_bytes": sum(down), "client_recover_s": m.recover_s,
+        "client_verify_s": None if cell.arm in FUSED_ARMS else m.verify_s}, profile)
+
+
+def client_rows_for(cell: Cell, profile: amortise.Profile, *, run_id: str = "synthetic", seed: int = 0) -> list[dict]:
+    """Client-mode rows as netem.py writes them under netem/<profile>/. Each round trip is what is left of
+    TRUE_EMULATION_FACTOR x the modelled latency after the client's own work, with noise."""
+    m = MODELS[cell.arm]
+    client_s = m.query_gen_s + m.recover_s + (0.0 if cell.arm in FUSED_ARMS else m.verify_s)
+    rtt_s = TRUE_EMULATION_FACTOR[profile.name] * modelled_latency(cell, profile) - client_s
+    rng = np.random.default_rng([seed, zlib.crc32(f"{cell.cell_id}/{profile.name}".encode())])
+    rows = rows_for(cell, run_id=run_id, seed=seed)
+    for r in rows:
+        servers = len(r["metrics"]["server_answer_s"])
+        r["mode"] = "client"
+        r["metrics"] |= {"rtt_s": [float(rtt_s * rng.lognormal(0.0, NOISE_SIGMA)) for _ in range(servers)],
+                         "rtt_cpu_s": [None] * servers, "server_answer_cpu_s": [None] * servers}
+    return rows
