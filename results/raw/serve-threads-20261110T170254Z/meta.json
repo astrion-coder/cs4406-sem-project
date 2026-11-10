@@ -1,0 +1,15 @@
+{
+ "run_id": "serve-threads-20261110T170254Z",
+ "git_sha": "52afe4571c3d289fb952dafd0eb9f912c872c653",
+ "dirty": true,
+ "plain": {
+  "apir-adapter": "2fd57ef3a448ad515d7c6c8c8ba0d6ed099cc848c8c1d86b2f4ee0f6666ea3f7",
+  "simplepir-adapter": "ab8ba7a31f3808c2824b5bc95443126f00744ae5bac3b29003f7fd5aac459705",
+  "vsp-adapter": "60839b1e22ccee61a08acd587577462dca87ef75baf1e4161e9105c909c147db"
+ },
+ "instrumented": {
+  "apir-adapter": "8633f8880f873e4a663b610e3880ec4ad2e33b58eaff368d65b384d475e407a4",
+  "simplepir-adapter": "a75235e803d65da4e70f9bfcd23653766741e50b48f30269d1a35b9e4a443b39",
+  "vsp-adapter": "5aa8edc31cfa69451bf77526f7f53ac5d179fc4bbd5b9823d5102d1f6222ef6a"
+ }
+}

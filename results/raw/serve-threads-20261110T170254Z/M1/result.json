@@ -1,0 +1,36 @@
+{
+ "arm": "M1",
+ "db_bytes": 1048576,
+ "workers": 6,
+ "clients": 16,
+ "replay_s": 61.67638779200206,
+ "matched": 2176,
+ "mismatched": 0,
+ "client_errors": [],
+ "disturbances": {
+  "stats": 122,
+  "wrong_length": 122,
+  "unknown_type": 122,
+  "resets": 122
+ },
+ "disturbance_errors": [],
+ "exit_codes": [
+  0,
+  0
+ ],
+ "summary_records": [
+  1,
+  1
+ ],
+ "peak_footprint_bytes": [
+  253035576,
+  252724280
+ ],
+ "over_cap": [
+  false,
+  false
+ ],
+ "race_reports": 0,
+ "tsan_files": [],
+ "clean": true
+}

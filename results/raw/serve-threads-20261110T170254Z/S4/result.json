@@ -1,0 +1,32 @@
+{
+ "arm": "S4",
+ "db_bytes": 65536,
+ "workers": 6,
+ "clients": 16,
+ "replay_s": 101.200760000007,
+ "matched": 106,
+ "mismatched": 0,
+ "client_errors": [],
+ "disturbances": {
+  "stats": 100,
+  "wrong_length": 100,
+  "unknown_type": 100,
+  "resets": 100
+ },
+ "disturbance_errors": [],
+ "exit_codes": [
+  0
+ ],
+ "summary_records": [
+  1
+ ],
+ "peak_footprint_bytes": [
+  117343192
+ ],
+ "over_cap": [
+  false
+ ],
+ "race_reports": 0,
+ "tsan_files": [],
+ "clean": true
+}

@@ -21,4 +21,4 @@ A constructor that finds the parameters unsupported returns `serve.Unsupported` 
 
 A worker writes its `ANSWER` under the connection's write lock, so a client that stops reading stalls the worker answering it. The load generator and the test clients always read, so this does not arise in our runs.
 
-The race detector found no races in either Go server. Each arm ran W=6 against 16 clients replaying a corpus, with every answer checked by SHA-256: S0-go, S3, M0 and M1 at 1 MiB for 65 s, and S4 at 64 KiB for 100 s. It cannot see inside S0-go's C kernel (`pir.c`), whose safety rests on the code reading in `docs/serve_protocol.md`.
+`notebooks/05_serve_thread_safety.ipynb` builds both Go servers with `-race` and runs every arm under concurrent load (see `docs/serve_protocol.md`, "Threads"). It cannot see inside S0-go's C kernel (`pir.c`), whose safety rests on the code reading in that document.

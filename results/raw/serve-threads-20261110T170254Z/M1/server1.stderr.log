@@ -1,0 +1,3 @@
+apir-adapter: M1: laying out 1048576-byte database (seed 1234)
+apir-adapter: M1: offline phase
+vpir-serve ready 127.0.0.1:62257

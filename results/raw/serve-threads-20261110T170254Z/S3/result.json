@@ -1,0 +1,32 @@
+{
+ "arm": "S3",
+ "db_bytes": 1048576,
+ "workers": 6,
+ "clients": 16,
+ "replay_s": 60.045441875001416,
+ "matched": 38950,
+ "mismatched": 0,
+ "client_errors": [],
+ "disturbances": {
+  "stats": 60,
+  "wrong_length": 60,
+  "unknown_type": 60,
+  "resets": 60
+ },
+ "disturbance_errors": [],
+ "exit_codes": [
+  0
+ ],
+ "summary_records": [
+  1
+ ],
+ "peak_footprint_bytes": [
+  813680320
+ ],
+ "over_cap": [
+  false
+ ],
+ "race_reports": 0,
+ "tsan_files": [],
+ "clean": true
+}

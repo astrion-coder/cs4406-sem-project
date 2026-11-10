@@ -44,5 +44,6 @@ Measurement machine: Apple M1 Pro, 8 cores (6 performance + 2 efficiency), 17179
 | Adapter memory at the test sizes, the basis for the tests' 2 GiB cap | the largest peak footprint is 0.29 GiB (S3 at 1 MiB), so the cap is 6.9 times it. The other seven cases peak at 0.24 GiB or less | `04_p7_memory_findings.ipynb`, cell 3 [exec 3] |
 | S4 (DDH on P-256) cost per database size, measured awake, on AC and idle | a digest build takes 22.5 s at 64 KiB, 85.8 s at 256 KiB and 342.0 s at 1 MiB, and one query takes 1.21 s, 4.56 s and 17.61 s. Both grow about linearly with size (fitted exponents 0.98 and 0.97) | `06_s4_cost.ipynb`, cell 2 [exec 2] |
 | S4 cannot meet the 30-minute cap per cell (decision 10) at the spec's repetition counts (6 digests offline, 31 queries online) | measured at 1 MiB: offline cell 34 min (over), online cell 15 min. Extrapolated: 517 min and 218 min at 16 MiB, 3985 min and 1647 min at 128 MiB | `06_s4_cost.ipynb`, cell 3 [exec 3] |
+| Serve mode is free of data races under concurrent load (gate G6's thread-safety half) | with the Go race detector and ThreadSanitizer, both shown live on a deliberate race, 8 of 8 configurations ran 60 s at W = 6 with 16 clients and malformed traffic: 0 race reports, 0 mismatched answers among 4,747,596 checked | `05_serve_thread_safety.ipynb`, cells 2 and 3 [exec 2, 3] |
 
 # Just for test
