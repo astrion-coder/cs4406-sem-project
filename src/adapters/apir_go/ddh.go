@@ -109,3 +109,11 @@ func (c *ddhCell) staleAnswer(_ int, q []byte) []byte {
 	must(err)
 	return a
 }
+
+func (c *ddhCell) dbData() []byte { return c.data }
+
+func (c *ddhCell) queryLens() []int {
+	q, err := c.other.QueryBytes(0)
+	must(err)
+	return []int{len(q)}
+}

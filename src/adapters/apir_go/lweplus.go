@@ -140,3 +140,10 @@ func (c *lwePlusCell) flipBits(index int) []bitRange {
 func (c *lwePlusCell) truth(index int) []byte {
 	return []byte{(c.bits[index/8] >> (index % 8)) & 1}
 }
+
+func (c *lwePlusCell) dbData() []byte { return c.bits }
+
+func (c *lwePlusCell) queryLens() []int {
+	i, j := utils.VectorToMatrixIndices(0, c.p.M)
+	return []int{len(matrix.MatricesToBytes(c.other.Query(i, j)))}
+}

@@ -105,3 +105,7 @@ M1 has a second guard (`refuseDecode` in `xorpir.go`). `merkle.DecodeProof` read
 | M1 | M0's keys plus `hash` (BLAKE3) and `proof_bytes` |
 
 `tECC` is 4, 5, 6 and 7 at 2^23, 2^27, 2^30 and 2^33 bits (plan decision 9), computed with `scripts/integrity_amplification.py` at the 2^-64 target. Any other S3 size writes one `status="unsupported_params"` record per phase, with the reason in `error`.
+
+## Serve mode
+
+`--mode serve` and `--mode client` follow `docs/serve_protocol.md`, through the shared `../serve_go` package (`serve.go` here). Each server builds its cell exactly as bench setup does and answers with the same `answer` calls. `public_seed` is null for every arm, because upstream fixes `A` (`utils.SeedMatrixA`). A server checks a query's length against a real query of its own client, so it never passes a malformed query to the library.

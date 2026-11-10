@@ -63,6 +63,9 @@ type session struct {
 	faultOff *stream
 	check    *stream
 
+	// publicKey, when set, seeds the public matrix A (serve and client mode).
+	publicKey *pir.PRGKey
+
 	squished      bool
 	faultChecked  bool
 	decodeChecked bool
@@ -188,7 +191,7 @@ func (s *session) offline() (offlineTimes, error) {
 	}
 	var t offlineTimes
 	debug.SetGCPercent(100)
-	t.init = timed(func() { s.serverShared = s.pi.Init(s.db.Info, s.p) })
+	t.init = timed(func() { s.serverShared = s.initA() })
 	debug.SetGCPercent(-1)
 	runtime.GC()
 
@@ -201,6 +204,16 @@ func (s *session) offline() (offlineTimes, error) {
 	s.clientA, s.clientH = pir.State{}, pir.Msg{}
 	t.hint, t.aMatrix = int64(len(s.hintBytes)), int64(len(s.aBytes))
 	return t, nil
+}
+
+// initA draws the public matrix A. With a publicKey it uses upstream's
+// InitCompressedSeeded, which overwrites the library's global PRG reader.
+func (s *session) initA() pir.State {
+	if s.publicKey == nil {
+		return s.pi.Init(s.db.Info, s.p)
+	}
+	st, _ := s.pi.InitCompressedSeeded(s.db.Info, s.p, s.publicKey)
+	return st
 }
 
 func (s *session) offlineRecord(rep, warmup int) (Record, error) {

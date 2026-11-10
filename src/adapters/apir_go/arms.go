@@ -61,6 +61,13 @@ type cell interface {
 	// client generated.
 	staleAnswer(server int, q []byte) []byte
 	truth(index int) []byte
+	// dbData is the seeded database array the server was built from, which
+	// serve mode fingerprints.
+	dbData() []byte
+	// queryLens is the byte length of each server's query, read off a real
+	// query from the shadow client. Serve mode checks incoming queries
+	// against it before calling the library.
+	queryLens() []int
 }
 
 // bitRange is n consecutive bits starting at bit first of a message; bit b

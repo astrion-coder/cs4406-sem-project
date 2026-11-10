@@ -263,7 +263,7 @@ def parse_corpus(data: bytes, servers: int) -> Corpus:
                 f"{where}: QUERY body {len(qbody)} B, EXPECT body {len(ebody)} B")
             (qid,) = struct.unpack_from(">Q", qbody)
             eid, esrv, alen = struct.unpack_from(">QBI", ebody)
-            assert qid == q and eid == q, f"{where}: req_id QUERY {qid}, EXPECT {eid}, want {q}"
+            assert qid == q + 1 and eid == q + 1, f"{where}: req_id QUERY {qid}, EXPECT {eid}, want {q + 1}"
             assert esrv == s, f"{where}: EXPECT server_id {esrv}"
             assert alen > 0, f"{where}: EXPECT answer_len 0"
             row.append(Item(qbody[8:], alen, ebody[13:]))
@@ -685,10 +685,13 @@ def test_client_records(arm, client_run):
             assert key in m, f"{where}: metrics missing {key!r}"
         for key in ("query_gen_s", "client_recover_s"):
             assert _is_num(m[key]) and m[key] >= 0, f"{where}: {key}={m[key]!r}"
-        if arm.fused:
-            assert m["verify_fused"] is True and m["client_verify_s"] is None, f"{where}: fused verify"
+        # As in bench records: S1 and S2 time a separate check, the fused arms verify inside
+        # reconstruction, and the baselines (S0-go, S0-cpp, M0) have no check at all.
+        assert m["verify_fused"] is arm.fused, f"{where}: verify_fused {m['verify_fused']!r}"
+        if arm.name in ("S1", "S2"):
+            assert _is_num(m["client_verify_s"]) and m["client_verify_s"] >= 0, f"{where}: client_verify_s"
         else:
-            assert m["verify_fused"] is False and _is_num(m["client_verify_s"]) and m["client_verify_s"] >= 0
+            assert m["client_verify_s"] is None, f"{where}: client_verify_s={m['client_verify_s']!r}, no separate check"
         for key in ("rtt_s", "server_answer_s"):
             v = m[key]
             assert isinstance(v, list) and len(v) == arm.servers and all(

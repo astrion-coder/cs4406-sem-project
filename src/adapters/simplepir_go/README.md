@@ -110,3 +110,7 @@ S0-go is a baseline and accepts only `--recovery abort`. `switch_replica` and `r
 ## Parameter rejection
 
 The library rejects with panics. The adapter turns a panic during parameter selection or database setup into one `unsupported_params` record per requested phase (exit 0), with the panic text in `error`. A `--db-bytes` that needs more than `2^21` columns hits an upstream quirk: `Params.PickParams` walks past the last row of `params.csv` into the empty line after its trailing newline, so the panic text is `index out of range` rather than `No suitable params known!`.
+
+## Serve mode
+
+`--mode serve` and `--mode client` follow `docs/serve_protocol.md`, through the shared `../serve_go` package (`serve.go` here). Both sides draw `A` with upstream's `InitCompressedSeeded`, keyed by SHA-256 of `--seed`, so a server and a client started with the same seed agree on it. `INFO` sends that key as `public_seed`. Bench mode still calls `Init`. `InitCompressedSeeded` also fixes the library's global PRG, so the client's query secrets are deterministic in these modes. `--seed` must fit in 63 bits.

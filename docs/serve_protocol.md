@@ -46,6 +46,8 @@ All integers are unsigned and big-endian. A peer that receives a frame longer th
 | 0x07 | `ERROR` | server to client | `u64 req_id` (0 for the connection), then a UTF-8 message |
 | 0x10 | `EXPECT` | corpus files only | `u64 req_id`, `u8 server_id`, `u32 answer_len`, 32-byte SHA-256 of the honest answer |
 
+A client chooses its own `req_id` values and never uses 0, which `ERROR` reserves for the connection.
+
 Query and answer bytes are exactly the bench-mode encodings in each adapter's README, so `up_bytes` and `down_bytes` mean the same thing in both modes. S3's `2t+1` sub-queries travel in one `QUERY` frame, as in bench mode (decision 15).
 
 ## Session
@@ -92,7 +94,7 @@ The load generator asks at the start and the end of its steady-state window. `se
 
 `--mode client --corpus-out PATH` runs Q queries one at a time against honest servers, checks that each decodes to the right record, and writes:
 
-- `PATH`, a file of frames. First the `INFO` of each server, in server order. Then for each query, with `req_id` = 0, 1, ..., Q-1, and for each server in order: its `QUERY` frame, then an `EXPECT` frame with the length and SHA-256 of that server's answer.
+- `PATH`, a file of frames. First the `INFO` of each server, in server order. Then for each query, with `req_id` = 1, 2, ..., Q, and for each server in order: its `QUERY` frame, then an `EXPECT` frame with the length and SHA-256 of that server's answer.
 - `--out`, one bench-shaped online record per query, with the client-side costs `query_gen_s`, `client_recover_s` and `client_verify_s`. `server_answer_s` comes from `answer_ns`, and a new metric `rtt_s` gives one round-trip time per server.
 
 The client exits 1 if any answer decodes wrong, so a corpus only ever records answers that a verified honest server gave. Each library's answer is a deterministic function of the database and the query (see "Threads"), so a byte-identical answer under load proves the answer correct. This is the check `test_concurrent_correctness` makes.
@@ -125,6 +127,8 @@ Rules that follow:
 - **Clients are not shared.** apir-code's clients write `c.state` in `Query` and read it in `Reconstruct` (`client/lwe.go:44-51,75-90`, `client/dh.go:62`, `client/pir_point.go:50,69`). Each client process owns its own client object.
 
 The table rests on reading the code. Once serve mode exists, IC also runs the Go servers built with `-race` and the C++ server built with `-fsanitize=thread`, at 1 MiB with W = 6 and 16 clients, and records the result here.
+
+- **Go, 10 November.** No race reports and no mismatched answers. S0-go, S3, M0 and M1 ran at 1 MiB for 65 s, and S4 at 64 KiB for 100 s. Every answer was checked against the corpus by SHA-256: 1,137,619 for S0-go, 26,628 for S3, 25,544 for M0, 2,072 for M1 and 154 for S4. The detector cannot see inside S0-go's C kernel, so that part still rests on the reading above.
 
 ## Changes this needs elsewhere
 

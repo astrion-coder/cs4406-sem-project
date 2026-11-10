@@ -169,3 +169,7 @@ func (c *xorCell) buildStale() {
 }
 
 func (c *xorCell) staleAnswer(k int, q []byte) []byte { return c.stale[k].Answer(q) }
+
+func (c *xorCell) dbData() []byte { return c.data }
+
+func (c *xorCell) queryLens() []int { return lens(c.other.Query(0, len(c.srv))) }

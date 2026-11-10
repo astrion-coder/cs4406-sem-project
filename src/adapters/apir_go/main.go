@@ -16,6 +16,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	serve "github.com/imankalyan/cs4406-sem-project/src/adapters/serve_go"
 )
 
 var upstreamSHA = "unknown"
@@ -40,6 +42,9 @@ type usageError struct{ msg string }
 func (e usageError) Error() string { return e.msg }
 
 func main() {
+	if serve.ModeOf(os.Args[1:]) != "bench" {
+		os.Exit(serve.Main(os.Args[1:], serveArm{}))
+	}
 	runtime.GOMAXPROCS(1)
 	cfg, err := parseArgs(os.Args[1:])
 	if errors.Is(err, flag.ErrHelp) {
@@ -58,6 +63,7 @@ func main() {
 func parseArgs(args []string) (config, error) {
 	var cfg config
 	fs := flag.NewFlagSet("apir-adapter", flag.ContinueOnError)
+	fs.String("mode", "bench", "bench (serve and client are handled before this parser)")
 	fs.StringVar(&cfg.armName, "arm", "", "arm: "+strings.Join(armNames(), ", "))
 	fs.IntVar(&cfg.dbBytes, "db-bytes", 0, "total database size in bytes")
 	fs.IntVar(&cfg.recordBytes, "record-bytes", 0, "record size in bytes; 0 for S3 and S4, which retrieve one bit")
@@ -161,6 +167,20 @@ func envOrNull(name string) *string {
 	return nil
 }
 
+// baseRecord is the part of every record that the run fixes.
+func baseRecord(cfg config) Record {
+	r := Record{
+		RunID: envOrNull("VPIR_RUN_ID"), GitSHAHarness: envOrNull("VPIR_GIT_SHA"), Platform: envOrNull("VPIR_PLATFORM"),
+		UpstreamSHA: upstreamSHA, Adapter: "apir_go", Arm: cfg.armName,
+		DBBytes: cfg.dbBytes, RetrievedBits: cfg.geom.retrievedBits, NRecords: cfg.geom.nRecords,
+		Seed: cfg.seed, Fault: cfg.fault, FaultProb: cfg.faultProb, Recovery: cfg.recovery, Status: "ok",
+	}
+	if !cfg.arm.oneBit {
+		r.RecordBytes = ptr(cfg.recordBytes)
+	}
+	return r
+}
+
 func run(cfg config) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
@@ -172,15 +192,7 @@ func run(cfg config) (err error) {
 		return err
 	}
 	defer f.Close()
-	w := &recordWriter{f: f, base: Record{
-		RunID: envOrNull("VPIR_RUN_ID"), GitSHAHarness: envOrNull("VPIR_GIT_SHA"), Platform: envOrNull("VPIR_PLATFORM"),
-		UpstreamSHA: upstreamSHA, Adapter: "apir_go", Arm: cfg.armName,
-		DBBytes: cfg.dbBytes, RetrievedBits: cfg.geom.retrievedBits, NRecords: cfg.geom.nRecords,
-		Seed: cfg.seed, Fault: cfg.fault, FaultProb: cfg.faultProb, Recovery: cfg.recovery, Status: "ok",
-	}}
-	if !cfg.arm.oneBit {
-		w.base.RecordBytes = ptr(cfg.recordBytes)
-	}
+	w := &recordWriter{f: f, base: baseRecord(cfg)}
 	phases := map[string][]string{"offline": {"offline"}, "online": {"online"}, "all": {"offline", "online"}}[cfg.phase]
 
 	logf("%s: laying out %d-byte database (seed %d)", cfg.armName, cfg.dbBytes, cfg.seed)

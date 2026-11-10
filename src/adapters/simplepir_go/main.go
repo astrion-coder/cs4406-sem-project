@@ -12,6 +12,7 @@ import (
 	"runtime/debug"
 
 	"github.com/ahenzinger/simplepir/pir"
+	serve "github.com/imankalyan/cs4406-sem-project/src/adapters/serve_go"
 )
 
 var upstreamSHA = "unknown"
@@ -25,6 +26,7 @@ func (e usageError) Error() string { return string(e) }
 func parse(args []string) (cfg config, phase string, reps, warmup int, out string, err error) {
 	fs := flag.NewFlagSet("simplepir-adapter", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	fs.String("mode", "bench", "bench (serve and client are handled before this parser)")
 	armF := fs.String("arm", "", "arm to run (S0-go)")
 	fs.Int64Var(&cfg.dbBytes, "db-bytes", 0, "total database size in bytes")
 	fs.Int64Var(&cfg.recordBytes, "record-bytes", 0, "record size in bytes")
@@ -187,6 +189,9 @@ func writeUnsupported(cfg config, phase string, lay Layout, cause error, w write
 }
 
 func main() {
+	if serve.ModeOf(os.Args[1:]) != "bench" {
+		os.Exit(serve.Main(os.Args[1:], serveArm{}))
+	}
 	cfg, phase, reps, warmup, out, err := parse(os.Args[1:])
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
