@@ -67,6 +67,10 @@ adapters:
 	cd src/adapters/simplepir_go && GOPROXY=off go build \
 		-ldflags "-X main.upstreamSHA=$$(git -C $(CURDIR)/third_party/simplepir rev-parse HEAD)" \
 		-o $(CURDIR)/$(ADAPTERS)/simplepir-adapter .
+	cd src/adapters/apir_go && GOPROXY=off go build \
+		-ldflags "-X main.upstreamSHA=$$(git -C $(CURDIR)/third_party/apir-code rev-parse HEAD)" \
+		-o $(CURDIR)/$(ADAPTERS)/apir-adapter .
+	$(MAKE) -C src/adapters/vsp_cpp LLVM_PREFIX=$(LLVM_PREFIX) OPENSSL_PREFIX=$(OPENSSL_PREFIX)
 
 test:
 	uv run python -m cs4406_sem_project.harness.upstream_tests $(if $(ONLY),--only $(ONLY))

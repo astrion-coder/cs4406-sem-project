@@ -33,6 +33,9 @@ This plan divides the remaining work between the two of us. The build contract i
 | 15 | Rounds per query | One round trip for every scheme. LWE+ sends its 2t+1 sub-queries in that one round. |
 | 16 | Crashes and threads | VeriSimplePIR aborts the process on a rejected proof, so every cell runs in its own subprocess. The DDH digest build is forced to one thread. |
 | 17 | Licence | apir-code is GPL-3.0. Its adapter lives in its own directory with a GPL licence file. IC confirms with Prof. Nelakanti before the repo is public. |
+| 18 | VeriSimplePIR records (S0-cpp, S1, S2) | A record is `record_bytes` one-byte entries in one database column, so one query and one answer retrieve it. Upstream's `packDataInMatrix` aborts on most record sizes once an entry is split across matrix elements (`database.cpp:311`), and its own test uses one-byte entries (`pir_test.cpp:351-352`). The alternative is to keep only record sizes upstream accepts, which at 1 MiB is 512 B alone for all three arms. Made by IC's agent while IC was away. IC can switch. |
+| 19 | VeriSimplePIR padding | Upstream sizes its matrix from the entry count alone, so a record longer than a column forces a larger database than `db_bytes`. Such cells still run, and each record carries `scheme_params.padding_factor` (library entries over `db_bytes`). Analysis flags every cell above 1.1. Long records at small databases are the ones affected. Made by IC's agent. IC can choose to drop those cells instead. |
+| 20 | Decoding a record of several pieces | S0-go and the VeriSimplePIR arms decrypt the record's column once, then decode each piece. Calling upstream's `Recover` once per piece would repeat the whole decryption each time, so `client_recover_s` would grow with record size for no reason. On the first online repetition, each adapter checks its output against upstream's `Recover`. This refines decision 11. |
 
 ## How we split the work
 

@@ -1,6 +1,6 @@
 # Implementation Spec — *The Price of Verifiability in PIR: an independent, common-hardware re-evaluation*
 
-**Project:** CS4406 semester project · **Spec version:** 1.4 (2026-11-09). v1.4 records the humans' answers to the [HUMAN] questions (decisions 1 to 17 in `plan.md`), pins apir-code to the commit before DPF queries were added, and removes the dpf-go arm64 port. v1.3 runs everything natively on macOS on one Apple-silicon Mac, with a Homebrew toolchain and all code under `src/`. v1.2 corrected M0 (classic XOR two-server PIR, not DPF) and the Colombo et al. targets after checking the paper. v1.1 added query-volume, network, concurrency, multicore and measured-recovery experiments (RQ3a/3b, RQ4, RQ6, RQ7) and the prior-coverage table (§2.1).
+**Project:** CS4406 semester project · **Spec version:** 1.5 (2026-11-10). v1.5 adds decisions 18 to 20 in `plan.md`, on how the adapters lay out and decode multi-piece records. v1.4 records the humans' answers to the [HUMAN] questions (decisions 1 to 17 in `plan.md`), pins apir-code to the commit before DPF queries were added, and removes the dpf-go arm64 port. v1.3 runs everything natively on macOS on one Apple-silicon Mac, with a Homebrew toolchain and all code under `src/`. v1.2 corrected M0 (classic XOR two-server PIR, not DPF) and the Colombo et al. targets after checking the paper. v1.1 added query-volume, network, concurrency, multicore and measured-recovery experiments (RQ3a/3b, RQ4, RQ6, RQ7) and the prior-coverage table (§2.1).
 **Audience:** a coding LLM (or engineer) building the benchmark harness, plus the student team who own the scientific decisions.
 
 > **How to use this document.** Sections 1–3 give the scientific context; the coding agent should read them but not change them. Sections 4–11 are the build contract. Appendix A is a prompt you can paste in front of this spec. Anything marked **[HUMAN]** is a decision or check the students must make; the coding agent must stop and ask instead of guessing. "Decision N" refers to the humans' numbered decisions in `plan.md`.
@@ -98,7 +98,9 @@ Also run the paper-native configurations (SimplePIR 2^33 × 1 bit; apir 1 KiB / 
 
 **One-bit schemes.** S3 (LWE+) and S4 (DDH) retrieve one bit per query, so they report cost per retrieved bit at each database size and are left out of the record-size sweep. S4 runs only at 1 MiB, 16 MiB and 128 MiB, with a 30-minute cap per cell (decision 10).
 
-**S0-go records over 64 bits.** The adapter sends one query and runs one `Recover` per 64-bit piece. The pieces sit in the same database column, which the single answer already covers (decision 11).
+**S0-go records over 64 bits.** The adapter sends one query and decodes each 64-bit piece. The pieces sit in the same database column, which the single answer already covers (decision 11). The column is decrypted once per record, not once per piece (decision 20).
+
+**VeriSimplePIR records.** A record is `record_bytes` one-byte entries in one database column, decoded the same way (decisions 18 and 20). Upstream sizes its matrix from the entry count alone, so long records at small databases run on a padded database. Every record carries `scheme_params.padding_factor`, and analysis flags cells above 1.1 (decision 19).
 
 **Cells:** 4 sizes × 4 record sizes × 6 arms (S0-go, S0-cpp, S1, S2, M0, M1) = 96, plus 4 sizes for S3 and 3 sizes for S4, so 103, plus anchors. The harness must handle a scheme that rejects a parameter combination (e.g. VeriSimplePIR's `checkSISHardness()` assertion, or LWE parameter generation failing for `uint32_t`). Record it as `status="unsupported_params"` with the error message. **Never** change security parameters to force a cell to run.
 
