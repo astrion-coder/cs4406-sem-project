@@ -72,7 +72,7 @@ def summarise(df: pd.DataFrame) -> pd.DataFrame:
         frame.KEY + ["phase", "metric", "median", "p95", "n", "padding_factor"]]
 
 
-def _seed(*parts: object) -> list[int]:
+def seed_for(*parts: object) -> list[int]:
     return [SEED, zlib.crc32("|".join(map(str, parts)).encode())]
 
 
@@ -115,7 +115,7 @@ def overheads(df: pd.DataFrame, pairs: Iterable[Pair] = PAIRS,
                         continue
                     ratio, lo, hi = paired_bootstrap(
                         pair_rows.iloc[:, 0].to_numpy(), pair_rows.iloc[:, 1].to_numpy(),
-                        seed=_seed(pair.label, db, rec, phase, metric), resamples=resamples)
+                        seed=seed_for(pair.label, db, rec, phase, metric), resamples=resamples)
                     rows.append({"pair": pair.label, "num": pair.num, "den": pair.den, "role": pair.role,
                                  "db_bytes": db, "record_bytes": rec, "phase": phase, "metric": metric,
                                  "ratio": ratio, "ci_lo": lo, "ci_hi": hi, "n_pairs": len(pair_rows),
