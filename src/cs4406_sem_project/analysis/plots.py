@@ -1,10 +1,12 @@
-"""Figures F1-F6 and tables T1-T4 (spec 12) from raw result rows, in one command.
+"""Figures F1-F6, F8, F9 and tables T1-T4 (spec 12) from raw result rows, in one command.
 
     uv run python -m cs4406_sem_project.analysis.plots --runs results/raw/<run_id> ... [--out results/figures]
+        [--session results/raw/<run_id>/session] [--netem results/raw/<run_id>/netem]
     uv run python -m cs4406_sem_project.analysis.plots --synthetic tier1 --out <dir>
 
---synthetic builds the same outputs from analysis/synthetic.py rows, and stamps every figure and
-table "SYNTHETIC, not a result". Processed tables go to --processed as parquet.
+F8 needs --session (session_check.py) and F9 needs --netem (netem.py); without its input a figure is
+skipped with a note. --synthetic builds every output from analysis/synthetic.py rows, and stamps every
+figure and table "SYNTHETIC, not a result". Processed tables go to --processed as parquet.
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,10 +26,10 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
-from matplotlib.ticker import EngFormatter  # noqa: E402
+from matplotlib.ticker import EngFormatter, FuncFormatter  # noqa: E402
 
 from cs4406_sem_project.analysis import aggregate, amortise, frame, reproduce, synthetic  # noqa: E402
-from cs4406_sem_project.harness import grid  # noqa: E402
+from cs4406_sem_project.harness import grid, netem, session_check  # noqa: E402
 from cs4406_sem_project.harness.grid import fmt_size  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -58,21 +61,33 @@ class Tables:
     latency: pd.DataFrame
     t3: pd.DataFrame
     breakdown: pd.DataFrame
+    session: pd.DataFrame | None = None  # F8, from session_totals()
+    emulation: pd.DataFrame | None = None  # F9, from emulation()
 
 
-def build(df: pd.DataFrame, status: pd.DataFrame) -> Tables:
+def build(df: pd.DataFrame, status: pd.DataFrame, session: pd.DataFrame | None = None,
+          netem_rows: pd.DataFrame | None = None) -> Tables:
+    """`session` is session_check's comparison table and `netem_rows` the client rows with a profile
+    column; either is None when that experiment has not run."""
     summary = aggregate.summarise(df)
     med = aggregate.medians(summary)
+    latency = amortise.latency_table(df[df.phase == "online"], amortise.load_profiles())
     return Tables(
         frame=df, status=status, summary=summary, medians=med, overheads=aggregate.overheads(df),
-        amortised=amortise.amortised_table(med),
-        latency=amortise.latency_table(df[df.phase == "online"], amortise.load_profiles()),
-        t3=reproduce.compare(df, reproduce.load_targets()), breakdown=breakdown(med))
+        amortised=amortise.amortised_table(med), latency=latency,
+        t3=reproduce.compare(df, reproduce.load_targets()), breakdown=breakdown(med),
+        session=None if session is None else session_totals(med, session),
+        emulation=None if netem_rows is None or netem_rows.empty else emulation(netem_rows, latency))
 
 
 def processed(t: Tables) -> dict[str, pd.DataFrame]:
-    return {"frame": t.frame, "status": t.status, "summary": t.summary, "overheads": t.overheads,
-            "amortised": t.amortised, "latency": t.latency, "reproduction": t.t3, "breakdown": t.breakdown}
+    out = {"frame": t.frame, "status": t.status, "summary": t.summary, "overheads": t.overheads,
+           "amortised": t.amortised, "latency": t.latency, "reproduction": t.t3, "breakdown": t.breakdown}
+    if t.session is not None:
+        out["session_totals"] = t.session
+    if t.emulation is not None:
+        out |= {"emulation": t.emulation, "emulation_overheads": emulation_overheads(t.emulation)}
+    return out
 
 
 def _cell(med: pd.DataFrame, arm: str, db: int, rec: int) -> pd.Series | None:
@@ -109,6 +124,49 @@ def breakdown(med: pd.DataFrame) -> pd.DataFrame:
                          "extra offline bytes": cv.offline_bytes - cb.offline_bytes,
                          "extra online bytes": cv.online_bytes - cb.online_bytes})
     return pd.DataFrame(rows)
+
+
+F8_QS = (1, 10, 100, 1000)  # spec 12, F8
+F8_KINDS = {"total_s": "total client and server time (s)", "bytes": "total bytes"}
+
+
+def session_totals(med: pd.DataFrame, session: pd.DataFrame) -> pd.DataFrame:
+    """F8's table: per session cell, Q and quantity, the model's total Q x amortised(Q) from the grid
+    medians, beside the session's measured total wherever it ran Q queries."""
+    cells = session[frame.KEY].drop_duplicates().merge(med, on=frame.KEY, how="left")
+    computed = pd.concat([cells[frame.KEY].assign(q=q, quantity=kind, computed=q * amortise.AMORTISED[kind](cells, q))
+                          for kind in F8_KINDS for q in F8_QS], ignore_index=True)
+    measured = session[[*frame.KEY, "q", "quantity", "measured", "rel_diff", "flagged"]]
+    out = computed.merge(measured, on=[*frame.KEY, "q", "quantity"], how="left")
+    out["flagged"] = out.flagged.fillna(False).astype(bool)
+    return out
+
+
+def emulation(client: pd.DataFrame, latency: pd.DataFrame) -> pd.DataFrame:
+    """F9's table: per profile and cell, the emulated end-to-end latency (query generation to verified
+    record; the round trip covers sending, the answer and receiving) beside the modelled one."""
+    keys = ["profile", *frame.KEY]
+    lat = client.assign(emulated_s=client.query_gen_s + client.rtt_s_max + client.client_recover_s
+                        + client.client_verify_s.fillna(0.0))
+    g = lat.groupby(keys)
+    out = pd.DataFrame({"emulated_p50": g.emulated_s.median(), "emulated_p95": g.emulated_s.quantile(0.95),
+                        "n": g.size(), "online_bytes": g.online_bytes.median()}).reset_index()
+    modelled = latency.rename(columns={"p50": "modelled_p50", "p95": "modelled_p95"})
+    out = out.merge(modelled[[*keys, "modelled_p50", "modelled_p95"]], on=keys, how="left")
+    out["emulated_over_modelled"] = out.emulated_p50 / out.modelled_p50
+    return out
+
+
+def emulation_overheads(em: pd.DataFrame) -> pd.DataFrame:
+    """Per price pair, profile and cell: the verifiable arm's emulated latency and online bytes over its
+    baseline's."""
+    keys = ["profile", "db_bytes", "record_bytes"]
+    parts = []
+    for p in PRICE_PAIRS:
+        m = em[em.arm == p.num].merge(em[em.arm == p.den], on=keys, suffixes=("_v", "_b"))
+        parts.append(m[keys].assign(pair=p.label, arm=p.num, byte_overhead=m.online_bytes_v / m.online_bytes_b,
+                                    latency_overhead=m.emulated_p50_v / m.emulated_p50_b))
+    return pd.concat(parts, ignore_index=True)
 
 
 def _nz(x) -> float:
@@ -283,18 +341,7 @@ def f4_amortised(t: Tables) -> plt.Figure:
             ax.plot(qs, [fn(c, q) for q in qs], color=COLOR[arm], label=arm)
             ax.plot(amortise.QS, [fn(c, q) for q in amortise.QS], color=COLOR[arm], marker="o", markersize=5,
                     markeredgecolor=SURFACE, markeredgewidth=1.5, linestyle="none")
-        marked = 0
-        for a, b in (("S1", "M1"), ("S2", "M1"), ("M1", "S1"), ("M1", "S2")):
-            q = amortise.break_even_Q(cells[a], cells[b], kind)
-            if q is not None and 1 < q <= max(amortise.QS):
-                y = fn(cells[a], q)
-                ax.plot([q], [y], marker="D", markersize=6, color=INK, linestyle="none")
-                ax.annotate(f"{a} ≤ {b} from Q = {q:,}", (q, y), textcoords="offset points", xytext=(6, 6),
-                            fontsize=7, color=INK_2)
-                marked += 1
-        if not marked:
-            ax.text(0.02, 0.02, f"no break-even between S1, S2 and M1 for Q ≤ {max(amortise.QS):,}",
-                    transform=ax.transAxes, fontsize=7, color=INK_2)
+        _mark_break_even(ax, cells, kind, fn, max(amortise.QS))
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xticks(amortise.QS, [f"{q:,}" for q in amortise.QS])
@@ -306,6 +353,24 @@ def f4_amortised(t: Tables) -> plt.Figure:
                  "non-colluding servers)", x=0.02, ha="left", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     return fig
+
+
+def _mark_break_even(ax, cells: dict, kind: str, y_of: Callable, q_max: int) -> None:
+    """Mark where a single-server verifiable arm's offline phase starts to pay off against M1, or back."""
+    marked = 0
+    for a, b in (("S1", "M1"), ("S2", "M1"), ("M1", "S1"), ("M1", "S2")):
+        if cells.get(a) is None or cells.get(b) is None:
+            continue
+        q = amortise.break_even_Q(cells[a], cells[b], kind)
+        if q is not None and 1 < q <= q_max:
+            y = y_of(cells[a], q)
+            ax.plot([q], [y], marker="D", markersize=6, color=INK, linestyle="none")
+            ax.annotate(f"{a} ≤ {b} from Q = {q:,}", (q, y), textcoords="offset points",
+                        xytext=(6, 6 - 14 * marked), fontsize=7, color=INK_2)
+            marked += 1
+    if not marked:
+        ax.text(0.02, 0.02, f"no break-even between S1, S2 and M1 for Q ≤ {q_max:,}",
+                transform=ax.transAxes, fontsize=7, color=INK_2)
 
 
 def f5_network(t: Tables) -> plt.Figure:
@@ -377,9 +442,127 @@ def f6_breakdown(t: Tables) -> plt.Figure:
     return fig
 
 
+class Skip(Exception):
+    """The figure's input was not given or holds nothing to draw; the message says what is missing."""
+
+
+def f8_session(t: Tables) -> plt.Figure:
+    if t.session is None:
+        raise Skip("no session comparison; pass --session results/raw/<run_id>/session after session_check.py")
+    s = t.session
+    have = s[s.measured.notna() & s.computed.notna()]
+    db = have[have.record_bytes == FOCUS_RECORD].db_bytes.max()
+    if pd.isna(db):
+        raise Skip("no 1 KiB session cell has both a measured and a computed total")
+    db = int(db)
+    sel = s[(s.db_bytes == db) & ((s.record_bytes == FOCUS_RECORD) | s.arm.isin(ONE_BIT))]
+    arms = [a for a in grid.ARMS if a in set(sel.dropna(subset=["computed"]).arm)]
+    cells = {a: _cell(t.medians, a, db, 0 if a in ONE_BIT else FOCUS_RECORD) for a in arms}
+    qs = np.logspace(0, math.log10(max(F8_QS)), 200)
+    fig, axes = plt.subplots(1, len(F8_KINDS), figsize=(10, 3.8))
+    for ax, (kind, label) in zip(axes, F8_KINDS.items()):
+        fn = amortise.AMORTISED[kind]
+
+        def total(c, q, fn=fn):
+            return q * fn(c, q)
+
+        for arm in arms:
+            ax.plot(qs, [total(cells[arm], q) for q in qs], color=COLOR[arm],
+                    linestyle="--" if arm in ONE_BIT else "-", label=arm + (" (1 bit)" if arm in ONE_BIT else ""))
+            m = sel[(sel.arm == arm) & (sel.quantity == kind)].dropna(subset=["measured"])
+            ax.plot(m.q, m.measured, color=COLOR[arm], marker="o", markersize=7, markeredgecolor=SURFACE,
+                    markeredgewidth=1.5, linestyle="none")
+            off = m[m.flagged]
+            ax.plot(off.q, off.measured, marker="o", markersize=12, markerfacecolor="none", markeredgecolor=INK,
+                    markeredgewidth=1.2, linestyle="none")
+        _mark_break_even(ax, cells, kind, total, max(F8_QS))
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xticks(F8_QS, [f"{q:,}" for q in F8_QS])
+        ax.minorticks_off()
+        ax.set_xlabel("queries after one offline phase, Q")
+        ax.set_title(label, loc="left")
+    handles, _ = axes[0].get_legend_handles_labels()
+    fig.legend(handles=handles, loc="upper center", ncol=len(handles), bbox_to_anchor=(0.5, 0.95))
+    keys = [plt.Line2D([], [], color=INK_2, label="computed: offline + Q x online, grid medians"),
+            plt.Line2D([], [], color=INK_2, marker="o", linestyle="none", label="measured: one session"),
+            plt.Line2D([], [], marker="o", markersize=10, markerfacecolor="none", markeredgecolor=INK,
+                       linestyle="none", label="over 5 % apart at Q = 100 (spec 5)")]
+    fig.legend(handles=keys, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 0.89))
+    fig.suptitle(f"F8  Is setup worth it? Total cost after Q queries at {fmt_size(db)} x 1 KiB",
+                 x=0.02, ha="left", fontsize=11)
+    fig.tight_layout(rect=(0, 0, 1, 0.8))
+    return fig
+
+
+F9_MARKERS = {"lan": "o", "broadband": "s", "mobile": "^", netem.NONE: "D"}
+
+
+def _diagonal(ax, values, pad: float = 1.5, scale: str = "log") -> None:
+    lo, hi = float(np.nanmin(values)) / pad, float(np.nanmax(values)) * pad
+    ax.plot([lo, hi], [lo, hi], color=AXIS, linewidth=1, linestyle="--")
+    ax.set_xscale(scale)
+    ax.set_yscale(scale)
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(lo, hi)
+    ax.set_aspect("equal", adjustable="box")
+
+
+def f9_network(t: Tables) -> plt.Figure:
+    if t.emulation is None:
+        raise Skip("no emulated-link rows; pass --netem results/raw/<run_id>/netem after netem.py")
+    em = t.emulation
+    profiles = list(amortise.load_profiles())
+    fig, axes = plt.subplots(1, len(profiles) + 1, figsize=(13, 3.9))
+    for ax, profile in zip(axes, profiles):
+        sel = em[em.profile == profile].dropna(subset=["emulated_p50", "modelled_p50"])
+        if sel.empty:
+            _empty(ax, f"no {profile} rows")
+            continue
+        _diagonal(ax, pd.concat([sel.emulated_p50, sel.modelled_p50]))
+        for arm in [a for a in grid.ARMS if a in set(sel.arm)]:
+            a = sel[sel.arm == arm]
+            ax.plot(a.modelled_p50, a.emulated_p50, color=COLOR[arm], marker="o", markersize=7,
+                    markeredgecolor=SURFACE, markeredgewidth=1.5, linestyle="none", label=arm)
+        ax.set_title(f"{profile}: emulated against modelled", loc="left")
+        ax.set_xlabel("modelled p50 latency (s)")
+        ax.set_ylabel("emulated p50 latency (s)")
+    handles, labels = [], []
+    for ax in axes[:-1]:
+        for h, lab in zip(*ax.get_legend_handles_labels()):
+            if lab not in labels:
+                handles.append(h)
+                labels.append(lab)
+    ax = axes[-1]
+    ov = emulation_overheads(em).dropna(subset=["byte_overhead", "latency_overhead"])
+    if ov.empty:
+        _empty(ax, "no verifiable and baseline pair")
+    else:
+        _diagonal(ax, pd.concat([ov.byte_overhead, ov.latency_overhead]), pad=1.1, scale="linear")
+        for axis in (ax.xaxis, ax.yaxis):
+            axis.set_major_formatter(FuncFormatter(lambda v, _pos: f"{v:g}×"))
+        for r in ov.itertuples():
+            ax.plot([r.byte_overhead], [r.latency_overhead], color=COLOR[r.arm],
+                    marker=F9_MARKERS.get(r.profile, "P"), markersize=7, markeredgecolor=SURFACE,
+                    markeredgewidth=1.5, linestyle="none")
+        shapes = [plt.Line2D([], [], color=INK_2, marker=F9_MARKERS.get(p, "P"), linestyle="none", label=p)
+                  for p in dict.fromkeys(ov.profile)]
+        ax.legend(handles=shapes, loc="lower right", title="profile", title_fontsize=7)
+        ax.set_title("latency overhead against byte overhead", loc="left")
+        ax.set_xlabel("online bytes, verifiable / baseline")
+        ax.set_ylabel("emulated p50 latency, verifiable / baseline")
+    handles.append(plt.Line2D([], [], color=AXIS, linewidth=1, linestyle="--", label="y = x"))
+    fig.legend(handles=handles, loc="upper center", ncol=len(handles), bbox_to_anchor=(0.5, 0.92))
+    fig.suptitle("F9  Emulated (dummynet on lo0) against modelled end-to-end latency per profile, focus cells",
+                 x=0.02, ha="left", fontsize=11)
+    fig.tight_layout(rect=(0, 0, 1, 0.84))
+    return fig
+
+
 FIGURE_BUILDERS: dict[str, Callable[[Tables], plt.Figure]] = {
     "F1_reproduction": f1_reproduction, "F2_overhead_heatmaps": f2_heatmaps, "F3_absolute_cost": f3_absolute,
     "F4_amortised": f4_amortised, "F5_network": f5_network, "F6_breakdown": f6_breakdown,
+    "F8_session": f8_session, "F9_emulated_network": f9_network,
 }
 
 
@@ -440,7 +623,11 @@ def render(t: Tables, out: Path, *, synthetic_run: bool, sysinfo: Path = SYSINFO
     _style()
     written = []
     for name, build_fig in FIGURE_BUILDERS.items():
-        fig = build_fig(t)
+        try:
+            fig = build_fig(t)
+        except Skip as e:
+            print(f"skipped {name}: {e}", file=sys.stderr)
+            continue
         if synthetic_run:
             _stamp(fig)
         for ext in ("pdf", "png"):
@@ -469,19 +656,38 @@ def main(argv: list[str] | None = None) -> list[Path]:
                                                   "<out>/processed with --synthetic)")
     p.add_argument("--reference-platform", type=Path, default=aggregate.REFERENCE_PLATFORM)
     p.add_argument("--sysinfo", type=Path, default=SYSINFO)
+    p.add_argument("--session", type=Path, help="results/raw/<run_id>/session from session_check.py, for F8")
+    p.add_argument("--netem", type=Path, help="results/raw/<run_id>/netem from netem.py, for F9")
     args = p.parse_args(argv)
     if args.synthetic:
-        df = frame.rows_to_frame(synthetic.rows_for_cells(grid.expand(grid.load(), args.synthetic)))
+        if args.session or args.netem:
+            p.error("--synthetic builds its own session and network rows; drop --session and --netem")
+        g = grid.load()
+        df = frame.rows_to_frame(synthetic.rows_for_cells(grid.expand(g, args.synthetic)))
         status = pd.DataFrame()
+        session_rows = synthetic.rows_for_cells(session_check.session_cells(g, "focus", session_check.QUERIES),
+                                                run_id="synthetic-session")
+        session = session_check.compare(df, frame.rows_to_frame(session_rows))
+        cells = netem.netem_cells(g, "focus", netem.QUERIES)
+        netem_rows = pd.concat([
+            frame.rows_to_frame([r for c in cells for r in synthetic.client_rows_for(c, prof, run_id="synthetic-netem")
+                                 ]).assign(profile=name)
+            for name, prof in amortise.load_profiles().items()], ignore_index=True)
         processed_dir = args.processed or args.out / "processed"
     else:
         if not args.reference_platform.exists():
             p.error(f"{args.reference_platform} is missing; run make sysinfo on the reference Mac")
-        df, status = frame.load_runs(args.runs, args.reference_platform.read_text().strip())
+        for d in (args.session, args.netem):
+            if d is not None and not d.is_dir():
+                p.error(f"{d} is not a directory")
+        reference = args.reference_platform.read_text().strip()
+        df, status = frame.load_runs(args.runs, reference)
+        session = frame.load_session(args.session, reference) if args.session else None
+        netem_rows = frame.load_netem(args.netem, reference) if args.netem else None
         processed_dir = args.processed or aggregate.PROCESSED
     if df.empty:
         p.error("no usable rows")
-    t = build(df, status)
+    t = build(df, status, session, netem_rows)
     aggregate.write_tables(processed(t), processed_dir)
     written = render(t, args.out, synthetic_run=bool(args.synthetic), sysinfo=args.sysinfo)
     for path in written:
