@@ -1,0 +1,3 @@
+{"size": "1 MiB", "db_bytes": 1048576, "source": "measured", "digest_s": 342.03721125, "query_s": 17.610268124, "offline_cell_min": 34.203721125, "online_cell_min": 14.799258718233334}
+{"size": "16 MiB", "db_bytes": 16777216, "source": "extrapolated", "digest_s": 5170.410097547986, "query_s": 255.26891170289784, "offline_cell_min": 517.0410097547987, "online_cell_min": 218.06243933896366}
+{"size": "128 MiB", "db_bytes": 134217728, "source": "extrapolated", "digest_s": 39853.998294351164, "query_s": 1902.2978317488692, "offline_cell_min": 3985.3998294351168, "online_cell_min": 1647.0871846427685}

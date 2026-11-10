@@ -1,0 +1,6 @@
+{"run": "offline-65536", "wall_s": 22.513038873672485, "monotonic_s": 22.51304520800477, "slept_s": -6.334332283586264e-06, "power": ["AC Power", "AC Power"], "lid_closed": [false, false], "problems": []}
+{"run": "online-65536", "wall_s": 29.307965993881226, "monotonic_s": 29.307971665999503, "slept_s": -5.672118277288973e-06, "power": ["AC Power", "AC Power"], "lid_closed": [false, false], "problems": []}
+{"run": "offline-262144", "wall_s": 85.79474472999573, "monotonic_s": 85.79476066600182, "slept_s": -1.5936006093397737e-05, "power": ["AC Power", "AC Power"], "lid_closed": [false, false], "problems": []}
+{"run": "online-262144", "wall_s": 113.3415060043335, "monotonic_s": 113.34204462499474, "slept_s": -0.000538620661245659, "power": ["AC Power", "AC Power"], "lid_closed": [false, false], "problems": []}
+{"run": "offline-1048576", "wall_s": 342.155886888504, "monotonic_s": 342.15597345799324, "slept_s": -8.656948921270669e-05, "power": ["AC Power", "AC Power"], "lid_closed": [false, false], "problems": []}
+{"run": "online-1048576", "wall_s": 446.8424198627472, "monotonic_s": 446.84253049999825, "slept_s": -0.0001106372510548681, "power": ["AC Power", "AC Power"], "lid_closed": [false, false], "problems": []}
