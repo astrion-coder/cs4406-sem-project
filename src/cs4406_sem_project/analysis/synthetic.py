@@ -18,6 +18,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from cs4406_sem_project.analysis import amortise
+from cs4406_sem_project.harness import loadgen
 from cs4406_sem_project.harness.grid import Cell
 from cs4406_sem_project.harness.validate import ADAPTER_OF, BASELINE_ARMS, FUSED_ARMS, TWO_SERVER_ARMS
 
@@ -165,8 +166,8 @@ def planted_capacity_qps(arm: str, db_bytes: int, workers: int) -> float:
     return workers / (1 + LOADGEN_CONTENTION * (workers - 1)) / service_s(arm, db_bytes)
 
 
-def _loadgen_row(t, workers: int, run: int, load: dict, rng: np.random.Generator, *, clients: int | None,
-                 rate: float | None, run_id: str) -> dict:
+def _loadgen_row(t: loadgen.Target, workers: int, run: int, load: dict, rng: np.random.Generator, *,
+                 clients: int | None, rate: float | None, run_id: str) -> dict:
     jitter = lambda x: float(x * rng.lognormal(0.0, NOISE_SIGMA))  # noqa: E731
     s, cap, window = service_s(t.arm, t.db_bytes), planted_capacity_qps(t.arm, t.db_bytes, workers), load["window_s"]
     if rate is None:  # closed loop with no think time: Little's law gives the latency
@@ -193,13 +194,11 @@ def _loadgen_row(t, workers: int, run: int, load: dict, rng: np.random.Generator
     }
 
 
-def loadgen_points(targets: Iterable, load: dict, *, run_id: str = "synthetic-loadgen",
+def loadgen_points(targets: Iterable[loadgen.Target], load: dict, *, run_id: str = "synthetic-loadgen",
                    seed: int = 0) -> dict[tuple[str, str], list[dict]]:
     """Rows as harness/loadgen.py lays them out, keyed by (cell_id, point name). The closed sweep follows the
     harness's stop rule and `saturated` status, and the open loop's rates are fractions of the closed
     sweep's measured saturation throughput, both through the harness's own functions."""
-    from cs4406_sem_project.harness import loadgen  # loadgen imports the runner stack; keep it off the import path
-
     out: dict[tuple[str, str], list[dict]] = {}
     for t in targets:
         rng = np.random.default_rng([seed, zlib.crc32(f"{t.cell_id}/loadgen".encode())])
