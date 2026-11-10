@@ -11,12 +11,18 @@ from pathlib import Path
 
 import pytest
 
+from cs4406_sem_project.harness import memcap
+
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER_DIR = Path(os.environ.get("VPIR_ADAPTER_DIR", ROOT / "build" / "adapters"))
 REPS = int(os.environ.get("VPIR_CONFORMANCE_REPS", "100"))
 # Sized for the slowest run, S4 wrong_record at 1 MiB: the DDH digest, then two server answers
 # per query (the honest one and the substitute), with other partitions running alongside.
 TIMEOUT_S = float(os.environ.get("VPIR_CONFORMANCE_TIMEOUT", "7200"))
+# Each adapter run is killed if its memory footprint (resident plus compressed) passes this cap,
+# so a runaway allocation fails one test instead of exhausting the machine. 2 GiB is about 7x the
+# largest honest peak at these sizes (S3, 0.28 GiB), and five parallel partitions fit in 16 GiB.
+MEM_CAP = memcap.cap_from_env(2)
 DB_BYTES = 1 << 20
 SEED = 1234
 WARMUP = 1
@@ -188,10 +194,14 @@ def run(tmp_path_factory):
         child_env = {k: v for k, v in os.environ.items() if k not in HARNESS_ENV}
         child_env.update(env or {})
         try:
-            proc = subprocess.run(argv, capture_output=True, text=True, timeout=TIMEOUT_S,
-                                  env=child_env)
+            proc = memcap.run(argv, timeout_s=TIMEOUT_S, cap_bytes=MEM_CAP, env=child_env)
         except subprocess.TimeoutExpired:
             pytest.fail(f"timed out after {TIMEOUT_S}s: {' '.join(argv)}")
+        if proc.over_cap:
+            pytest.fail(
+                f"memory footprint passed the {MEM_CAP / memcap.GIB:g} GiB cap (VPIR_ADAPTER_MEM_CAP_GIB),"
+                f" killed: {' '.join(argv)}\nstderr tail:\n{proc.stderr[-1500:]}"
+            )
         records = []
         if out.is_file():
             for n, line in enumerate(out.read_text().splitlines(), 1):

@@ -8,7 +8,8 @@ one bit per query and require `--record-bytes 0`; S3 supports only 1 MiB among t
 
 Counts come from env vars: VPIR_RECOVERY_REPS (faulted trials, default 100),
 VPIR_RECOVERY_HONEST_REPS (honest queries, default 1000), VPIR_RECOVERY_BYTES_REPS (default 20) and
-VPIR_RECOVERY_TIMEOUT (subprocess timeout in seconds, default 7200).
+VPIR_RECOVERY_TIMEOUT (subprocess timeout in seconds, default 7200). VPIR_ADAPTER_MEM_CAP_GIB caps
+each adapter's memory footprint (default 2, see MEM_CAP).
 """
 
 import json
@@ -19,12 +20,18 @@ from pathlib import Path
 
 import pytest
 
+from cs4406_sem_project.harness import memcap
+
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER_DIR = Path(os.environ.get("VPIR_ADAPTER_DIR", ROOT / "build" / "adapters"))
 REPS = int(os.environ.get("VPIR_RECOVERY_REPS", "100"))
 HONEST_REPS = int(os.environ.get("VPIR_RECOVERY_HONEST_REPS", "1000"))
 BYTES_REPS = int(os.environ.get("VPIR_RECOVERY_BYTES_REPS", "20"))
 TIMEOUT_S = float(os.environ.get("VPIR_RECOVERY_TIMEOUT", "7200"))
+# Each adapter run is killed if its memory footprint (resident plus compressed) passes this cap,
+# so a runaway allocation fails one test instead of exhausting the machine. 2 GiB is about 7x the
+# largest honest peak at these sizes (S3, 0.28 GiB), and five parallel partitions fit in 16 GiB.
+MEM_CAP = memcap.cap_from_env(2)
 SEED = 1234
 BUDGET = 3
 OUTCOMES = ("accepted", "recovered", "aborted", "silent_wrong")
@@ -141,9 +148,14 @@ def run(tmp_path_factory):
         if replicas_cheat:
             argv.append("--replicas-cheat")
         try:
-            proc = subprocess.run(argv, capture_output=True, text=True, timeout=TIMEOUT_S)
+            proc = memcap.run(argv, timeout_s=TIMEOUT_S, cap_bytes=MEM_CAP)
         except subprocess.TimeoutExpired:
             pytest.fail(f"timed out after {TIMEOUT_S}s: {' '.join(argv)}")
+        if proc.over_cap:
+            pytest.fail(
+                f"memory footprint passed the {MEM_CAP / memcap.GIB:g} GiB cap (VPIR_ADAPTER_MEM_CAP_GIB),"
+                f" killed: {' '.join(argv)}\nstderr tail:\n{proc.stderr[-1500:]}"
+            )
         records = []
         if out.is_file():
             for n, line in enumerate(out.read_text().splitlines(), 1):
