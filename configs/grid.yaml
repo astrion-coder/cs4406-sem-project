@@ -1,0 +1,66 @@
+# The benchmark grid (spec 5, plan decisions 9 and 10). grid.py expands a tier into cells, one per
+# (arm, db size, record size, phase), and is the only code that converts sizes to bytes or bits.
+# Sizes are strings with a binary unit: B, KiB, MiB, GiB.
+
+seed: 1234
+warmup: 1  # spec 5: one warm-up per cell, recorded with is_warmup=true
+
+# Harness caps per (cell, phase). These are not measurements: they bound a run and the dry-run's
+# upper time estimate. A cell that hits one is recorded as timeout or oom (spec 9), never shrunk.
+timeout_s:
+  default: {"1MiB": 900, "16MiB": 1800, "128MiB": 3600, "1GiB": 7200}
+  S4: 2700  # decision 10: 45 minutes per S4 cell
+mem_cap_gib: 14  # the reference Mac has 16 GiB; memcap.py kills a run whose footprint passes this
+
+adapters:  # binary in build/adapters/ for each arm (src/adapters/README.md)
+  S0-go: simplepir-adapter
+  S0-cpp: vsp-adapter
+  S1: vsp-adapter
+  S2: vsp-adapter
+  S3: apir-adapter
+  S4: apir-adapter
+  M0: apir-adapter
+  M1: apir-adapter
+
+# Repetitions per phase (spec 5): online >= 30; offline >= 5 up to 128 MiB and >= 3 at 1 GiB.
+reps_full: &reps_full
+  online: 30
+  offline: {default: 5, "1GiB": 3}
+
+tiers:
+  smoke:  # spec 11: every arm at 1 MiB x 1 KiB x 3 reps, in under 10 minutes
+    reps: {online: 3, offline: {default: 3}}
+    sweep:
+      arms: [S0-go, S0-cpp, S1, S2, M0, M1]
+      db_bytes: ["1MiB"]
+      record_bytes: ["1KiB"]
+    one_bit:  # S3 and S4 retrieve one bit and take no record size (decision 10)
+      S3: ["1MiB"]
+      S4: ["64KiB"]
+
+  tier1:  # spec 5: 4 sizes x 4 record sizes x 6 arms = 96 cells, + 4 for S3 and 3 for S4 = 103
+    reps: *reps_full
+    sweep:
+      arms: [S0-go, S0-cpp, S1, S2, M0, M1]
+      db_bytes: ["1MiB", "16MiB", "128MiB", "1GiB"]
+      record_bytes: ["32B", "256B", "1KiB", "8KiB"]
+    one_bit:
+      S3: ["1MiB", "16MiB", "128MiB", "1GiB"]  # decision 9: tECC 4, 5, 6, 7
+      S4: ["64KiB", "256KiB", "1MiB"]  # decision 10: 16 MiB and 128 MiB are extrapolated
+
+  focus:  # spec 5.1: the cells the Tier 2 extensions (RQ3b, RQ4, RQ6, RQ7) run on
+    reps: *reps_full
+    sweep:
+      arms: [S0-go, S0-cpp, S1, S2, M0, M1]
+      db_bytes: ["128MiB", "1GiB"]
+      record_bytes: ["32B", "1KiB"]
+    one_bit:
+      S3: ["128MiB", "1GiB"]
+      S4: []  # S4 does not run at the focus sizes (decision 10)
+
+# RQ1 paper-native configurations (spec 5). Listed for review, not yet runnable: each needs a
+# record shape the spec 9 command line cannot express, or a tECC value decision 9 does not give.
+# TODO[HUMAN] IC: decide how the adapters take these, then move them into a tier.
+anchors_pending:
+  - {arm: S0-go, db: "1GiB", entry_bits: 1, why: "SimplePIR README, 2^33 x 1-bit entries; --record-bytes has no 1-bit form"}
+  - {arm: S3, db: "1KiB", why: "Colombo Fig 6 starts at 1 KiB; decision 9 gives tECC only from 1 MiB"}

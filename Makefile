@@ -15,7 +15,7 @@ PINS := \
 	verisimplepir,https://github.com/leodec/verisimplepir,3643bb7cbaae02da98a195c4d004d4d083e3ab88 \
 	apir-code,https://github.com/dedis/apir-code,35cabd62fb898926f5bea6035caeae39091e091d
 
-.PHONY: setup patch build adapters test conformance recovery sysinfo
+.PHONY: setup patch build adapters test conformance recovery sysinfo smoke bench
 
 setup:
 	for pin in $(PINS); do \
@@ -83,3 +83,12 @@ recovery: adapters
 
 sysinfo:
 	uv run python -m cs4406_sem_project.harness.sysinfo --json env/sysinfo.json --platform-file env/reference_platform.txt
+
+# RESUME=<run_id> continues a killed run; DRY=1 prints the plan and a time bound.
+GRID_ARGS = $(if $(RESUME),--resume $(RESUME)) $(if $(DRY),--dry-run)
+
+smoke: adapters sysinfo
+	uv run python -m cs4406_sem_project.harness.run_grid --tier smoke $(GRID_ARGS)
+
+bench: adapters sysinfo
+	uv run python -m cs4406_sem_project.harness.run_grid --tier tier1 $(GRID_ARGS)
