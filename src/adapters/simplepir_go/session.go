@@ -50,11 +50,12 @@ type config struct {
 // the database in place (the library squishes it), so squished tracks when
 // Reset must run before the next Setup.
 type session struct {
-	cfg config
-	pi  *pir.SimplePIR
-	lay Layout
-	p   pir.Params
-	db  *pir.Database
+	cfg   config
+	pi    *pir.SimplePIR
+	lay   Layout
+	p     pir.Params
+	db    *pir.Database
+	stale *pir.Database
 
 	records  *stream
 	index    *stream
@@ -95,12 +96,36 @@ func newSession(cfg config, lay Layout, pi *pir.SimplePIR) (*session, error) {
 		}
 	}
 	s.db = pir.MakeDB(lay.Entries, lay.EntryBits, &s.p, vals)
+	if cfg.fault == "stale_record" {
+		s.stale = s.staleDB(buf)
+	}
 	vals = nil
 	runtime.GC()
 	if err := s.spotCheck(4); err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+// staleDB is the current database with every bit of every record flipped,
+// laid out as the honest one is and squished the way Setup leaves it, so
+// upstream's Answer can run on it. Answer reads only the database, not the
+// hint, so Setup's matrix product is skipped.
+func (s *session) staleDB(buf []byte) *pir.Database {
+	vals := make([]uint64, s.lay.Entries)
+	for r := uint64(0); r < s.lay.Records; r++ {
+		s.record(r, buf)
+		for i := range buf {
+			buf[i] = ^buf[i]
+		}
+		for k, v := range pieces(buf, s.lay.Pieces) {
+			vals[s.lay.Entry(r, k)] = v
+		}
+	}
+	db := pir.MakeDB(s.lay.Entries, s.lay.EntryBits, &s.p, vals)
+	db.Data.Add(s.p.P / 2)
+	db.Squish()
+	return db
 }
 
 // spotCheck reads random records back out of the unsquished database and
@@ -291,6 +316,7 @@ func (s *session) onlineRecord(rep, warmup int) (Record, error) {
 	sa := timed(func() { ans = s.pi.Answer(db, serverQuery, s.serverState, s.serverShared, p) })
 	aBytes := encode(ans.Data[0])
 	down := int64(len(aBytes))
+	dropped := faulted && s.cfg.fault == "drop_server"
 
 	want := make([]byte, s.lay.RecordBytes)
 	s.record(idx, want)
@@ -320,11 +346,26 @@ func (s *session) onlineRecord(rep, warmup int) (Record, error) {
 			_, oq := s.pi.Query(s.lay.Entry(other, 0), s.clientA, p, db.Info)
 			oa := s.pi.Answer(db, pir.MakeMsgSlice(oq), s.serverState, s.serverShared, p)
 			aBytes = encode(oa.Data[0])
+		case "stale_record":
+			sans := s.pi.Answer(s.stale, serverQuery, s.serverState, s.serverShared, p)
+			aBytes = encode(sans.Data[0])
 		case "flip_hint_bit":
 			bit := s.hintFaultBit(idx, cstate.Data[0])
 			flipMatrixBit(s.clientH.Data[0], bit)
 			restoreHint = func() { flipMatrixBit(s.clientH.Data[0], bit) }
 		}
+	}
+	if dropped {
+		rec := s.base("online", rep, warmup)
+		rec.Faulted = true
+		m.QueryGenS, m.QueryGenCPUS = f64(qg.wall), f64(qg.cpu)
+		m.UpBytes, m.UpBytesPerServer = i64(int64(len(qBytes))), []int64{int64(len(qBytes))}
+		m.ServerAnswerS, m.ServerAnswerCPUS = []float64{sa.wall}, []float64{sa.cpu}
+		m.ProcessPeakRSSBytes = peakRSS()
+		rec.Metrics = m
+		rec.Analytical = s.analytical()
+		rec.RecoveryOutcome, rec.RecoveryAttempts = sptr("aborted"), iptr(0)
+		return rec, nil
 	}
 	clientAns := pir.MakeMsg(decode(aBytes, ans.Data[0].Rows, 1))
 
@@ -358,5 +399,10 @@ func (s *session) onlineRecord(rep, warmup int) (Record, error) {
 	rec.Metrics = m
 	rec.Analytical = s.analytical()
 	rec.Correct = bptr(correct)
+	outcome := "accepted"
+	if !correct {
+		outcome = "silent_wrong"
+	}
+	rec.RecoveryOutcome, rec.RecoveryAttempts = sptr(outcome), iptr(0)
 	return rec, nil
 }

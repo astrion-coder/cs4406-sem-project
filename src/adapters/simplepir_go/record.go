@@ -27,6 +27,9 @@ type Record struct {
 	Correct       *bool      `json:"correct"`
 	Detected      *bool      `json:"detected"`
 	Error         *string    `json:"error"`
+
+	RecoveryOutcome  *string `json:"recovery_outcome"`
+	RecoveryAttempts *int    `json:"recovery_attempts"`
 }
 
 // Metrics carries every metric key of the contract. A key that does not
@@ -59,6 +62,11 @@ type Metrics struct {
 	ClientVerifyS      *float64  `json:"client_verify_s"`
 	ClientVerifyCPUS   *float64  `json:"client_verify_cpu_s"`
 	VerifyFused        *bool     `json:"verify_fused"`
+
+	RecoveryS         *float64 `json:"recovery_s"`
+	RecoveryCPUS      *float64 `json:"recovery_cpu_s"`
+	RecoveryUpBytes   *int64   `json:"recovery_up_bytes"`
+	RecoveryDownBytes *int64   `json:"recovery_down_bytes"`
 
 	ProcessPeakRSSBytes int64 `json:"process_peak_rss_bytes"`
 }
@@ -94,4 +102,5 @@ type SchemeParams struct {
 func f64(x float64) *float64 { return &x }
 func i64(x int64) *int64     { return &x }
 func bptr(x bool) *bool      { return &x }
+func iptr(x int) *int        { return &x }
 func sptr(x string) *string  { return &x }

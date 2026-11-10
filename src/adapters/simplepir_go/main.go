@@ -32,9 +32,9 @@ func parse(args []string) (cfg config, phase string, reps, warmup int, out strin
 	fs.IntVar(&reps, "reps", 0, "measured repetitions")
 	fs.IntVar(&warmup, "warmup", 0, "warm-up repetitions, recorded first")
 	fs.Int64Var(&cfg.seed, "seed", 0, "seed for the database, query indices and faults")
-	fs.StringVar(&cfg.fault, "fault", "none", "none, flip_answer_bit, wrong_record or flip_hint_bit")
+	fs.StringVar(&cfg.fault, "fault", "none", "none, flip_answer_bit, wrong_record, flip_hint_bit, stale_record or drop_server")
 	prob := fs.Float64("fault-prob", -1, "chance that a repetition is faulted (1.0 when --fault is not none, else 0)")
-	fs.StringVar(&cfg.recovery, "recovery", "abort", "abort")
+	fs.StringVar(&cfg.recovery, "recovery", "abort", "abort (a baseline has no other policy)")
 	fs.StringVar(&out, "out", "", "JSONL file to append records to")
 	if err = fs.Parse(args); err != nil {
 		return
@@ -54,10 +54,10 @@ func parse(args []string) (cfg config, phase string, reps, warmup int, out strin
 	case out == "":
 		bad("--out is required")
 	case cfg.recovery != "abort":
-		bad("--recovery %q is not available yet, only abort", cfg.recovery)
+		bad("--recovery %q is not available for a baseline, only abort", cfg.recovery)
 	}
 	switch cfg.fault {
-	case "none", "flip_answer_bit", "wrong_record", "flip_hint_bit":
+	case "none", "flip_answer_bit", "wrong_record", "flip_hint_bit", "stale_record", "drop_server":
 	default:
 		bad("unsupported --fault %q for %s", cfg.fault, arm)
 	}

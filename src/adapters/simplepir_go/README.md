@@ -88,12 +88,20 @@ Applied to serialised bytes or to a decoded copy of them, never in library code.
 | `flip_answer_bit` | one uniform bit among the answer bits the record depends on, that is a uniform row of the record's `pieces * ne` rows and a uniform bit position in `[ceil(log2(q/p)), 32)`. Flipping it moves one Z_p digit of one piece by at least one, and the digit change survives `Reconstruct_from_base_p` (an odd power of `p` times a nonzero digit difference is nonzero mod `2^64`). |
 | `wrong_record` | the honest answer to a fresh query for a different record replaces the answer |
 | `flip_hint_bit` | online records: one bit of the client's hint, flipped for that repetition's `Recover` and flipped back. Offline records: one uniform bit of a copy of the hint (no record is queried offline), flagged `faulted`, with `correct` and `detected` null because S0-go has no offline check. |
+| `stale_record` | the answer comes from a second upstream database over the record-bit-flipped data (every byte of every record complemented), laid out as the honest one is (same entries, decision 11 pieces in one column) and squished as `Setup` leaves it, then answered by upstream `Answer` on the client's real query. Built once at start-up, untimed, and only when this fault is requested. The client keeps the honest hint, so decoding yields a wrong record and the outcome is `silent_wrong`. |
+| `drop_server` | no answer reaches the client. The record has `faulted=true`, `correct` null, the answer and client metrics null and `down_bytes` null, and outcome `aborted`. |
+
+`bad_proof` is a usage error (exit 2) because S0-go has no proof.
 
 The online hint bit is chosen like the answer bit, with one more condition. Flipping bit `b` of `H[j][c]` shifts the client's `H * secret` term by `2^b * secret[c] mod q`, and that shift survives rounding only if it is at least `delta` away from 0 (mod q). The adapter holds the client secret in bench mode, so it draws `(row, column, bit)` uniformly from the record's rows, all `n` columns and bits `[ceil(log2(q/p)), 32)`, and redraws until the shift is at least `delta`. About one draw in nine is rejected at `p = 991`, mostly bit 31 with an even `secret[c]`. The result is uniform over the hint bits the record's decoding actually depends on, given this query's secret.
 
 Self-check. On the first faulted repetition of `flip_answer_bit` or `flip_hint_bit` the adapter first decodes the honest answer and hint (untimed) and requires the ground-truth record, then requires the faulted decode to differ. Either failure aborts with exit 1 and a `fault check` message. The extra decode is outside every timer.
 
 S0-go has no verification, so `detected` is always null and a faulted run shows up only as `correct: false`.
+
+## Recovery
+
+S0-go is a baseline and accepts only `--recovery abort`. `switch_replica` and `re_preprocess` are usage errors (exit 2). Every online record has `recovery_attempts` 0 and null `recovery_*` metrics. `recovery_outcome` is `accepted` when the decoded record is correct, `silent_wrong` when it is not (`correct=false`), and `aborted` for `drop_server`. Offline records carry the recovery fields as null.
 
 ## Single thread, memory
 
