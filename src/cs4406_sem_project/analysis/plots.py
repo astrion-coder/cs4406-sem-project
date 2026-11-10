@@ -683,6 +683,11 @@ def main(argv: list[str] | None = None) -> list[Path]:
         reference = args.reference_platform.read_text().strip()
         df, status = frame.load_runs(args.runs, reference)
         session = frame.load_session(args.session, reference) if args.session else None
+        if session is not None:
+            grid_run = json.loads((args.session / frame.SESSION_COMPARISON).read_text())["grid_run"]
+            if grid_run not in {d.name for d in args.runs}:
+                p.error(f"{args.session} compares against grid run {grid_run}, which is not among --runs; "
+                        "F8 would draw two different runs' medians")
         netem_rows = frame.load_netem(args.netem, reference) if args.netem else None
         processed_dir = args.processed or aggregate.PROCESSED
     if df.empty:

@@ -106,14 +106,30 @@ def _p6_cells():
             [c for c in session_check.session_cells(g, "focus", session_check.QUERIES) if keep(c)])
 
 
-def test_session_and_netem_inputs_render_f8_and_f9_unmarked(tmp_path):
+def _write_session(tmp_path, grid_run: str):
     grid_cells, session_cells = _p6_cells()
     _write_run(tmp_path / "run", grid_cells)
     _write_run(tmp_path / "session", session_cells)
     grid_df = frame.load_runs([tmp_path / "run"], synthetic.PLATFORM)[0]
     session_df = frame.load_runs([tmp_path / "session"], synthetic.PLATFORM)[0]
     rows = json.loads(session_check.compare(grid_df, session_df).to_json(orient="records"))
-    (tmp_path / "session" / "comparison.json").write_text(json.dumps({"rows": rows}))
+    (tmp_path / "session" / "comparison.json").write_text(json.dumps({"grid_run": grid_run, "rows": rows}))
+    ref = tmp_path / "reference_platform.txt"
+    ref.write_text(synthetic.PLATFORM + "\n")
+    return grid_cells
+
+
+def test_session_from_another_grid_run_is_refused(tmp_path):
+    _write_session(tmp_path, grid_run="some-other-run")
+    with pytest.raises(SystemExit):
+        plots.main(["--runs", str(tmp_path / "run"), "--session", str(tmp_path / "session"),
+                    "--out", str(tmp_path / "out"), "--processed", str(tmp_path / "processed"),
+                    "--reference-platform", str(tmp_path / "reference_platform.txt")])
+    assert not (tmp_path / "out" / "F8_session.png").exists()
+
+
+def test_session_and_netem_inputs_render_f8_and_f9_unmarked(tmp_path):
+    grid_cells = _write_session(tmp_path, grid_run="run")
     profile = amortise.load_profiles()["broadband"]
     netem = tmp_path / "netem" / "broadband"
     netem.mkdir(parents=True)
@@ -122,7 +138,6 @@ def test_session_and_netem_inputs_render_f8_and_f9_unmarked(tmp_path):
             (netem / f"{c.cell_id}.jsonl").write_text(
                 "".join(json.dumps(r) + "\n" for r in synthetic.client_rows_for(c, profile)))
     ref = tmp_path / "reference_platform.txt"
-    ref.write_text(synthetic.PLATFORM + "\n")
     out = tmp_path / "out"
     plots.main(["--runs", str(tmp_path / "run"), "--session", str(tmp_path / "session"),
                 "--netem", str(tmp_path / "netem"), "--out", str(out), "--processed", str(tmp_path / "processed"),
