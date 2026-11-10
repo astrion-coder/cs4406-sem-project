@@ -15,7 +15,7 @@ PINS := \
 	verisimplepir,https://github.com/leodec/verisimplepir,3643bb7cbaae02da98a195c4d004d4d083e3ab88 \
 	apir-code,https://github.com/dedis/apir-code,35cabd62fb898926f5bea6035caeae39091e091d
 
-.PHONY: setup patch build adapters test conformance recovery sysinfo smoke bench
+.PHONY: setup patch build adapters test conformance recovery sysinfo smoke bench analyse figures
 
 setup:
 	for pin in $(PINS); do \
@@ -92,3 +92,13 @@ smoke: adapters sysinfo
 
 bench: adapters sysinfo
 	uv run python -m cs4406_sem_project.harness.run_grid --tier tier1 $(GRID_ARGS)
+
+# RUNS="results/raw/<run_id> ..." names the runs to analyse. SYNTHETIC=<tier> builds the figures from
+# synthetic rows instead, each marked "SYNTHETIC, not a result".
+RUNS_ARGS = $(if $(SYNTHETIC),--synthetic $(SYNTHETIC),--runs $(or $(RUNS),$(error set RUNS="results/raw/<run_id> ..." or SYNTHETIC=<tier>)))
+
+analyse:
+	uv run python -m cs4406_sem_project.analysis.aggregate --runs $(or $(RUNS),$(error set RUNS="results/raw/<run_id> ...")) --out results/processed
+
+figures:
+	uv run python -m cs4406_sem_project.analysis.plots $(RUNS_ARGS) --out results/figures
