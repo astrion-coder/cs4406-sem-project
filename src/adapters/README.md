@@ -108,6 +108,7 @@ Faults are injected only here, in the adapter, by changing the serialised server
 | `flip_answer_bit` | online | all | flips one random bit, chosen among the answer bits that the honest client's output for the queried record depends on (see below) |
 | `wrong_record` | online | all | replaces the answer with the honest answer to a different index |
 | `flip_hint_bit` | offline and online | S0-go, S0-cpp, S1, S2 | flips one random bit of the hint the client downloads, chosen among the bits the queried record's decoding depends on. In an offline record, S1 and S2 report whether preprocessing verification rejected it. In an online record, the corrupted hint is used for that repetition's reconstruction, which is where a baseline shows the effect. |
+| `stale_record`, `bad_proof`, `drop_server` | | | P7. Usage error (exit 2) until then. |
 
 A uniformly random bit usually cannot change the answer. It may fall outside the rows that hold the record, or below the rounding threshold of a lattice ciphertext, where it disappears in decoding. Such a fault demonstrates nothing, for a baseline or a verifiable arm, so the adapter picks a bit that matters:
 
@@ -122,19 +123,20 @@ For `flip_hint_bit`:
 - A baseline arm's offline record can only show `faulted=true`, because a baseline has no check that could fail.
 - For a verifiable arm, the client checks every hint it accepts. So in S1 and S2 an online record with a corrupted hint first runs the hint check (`VerifyPreprocZ`) and reports its verdict as `detected`.
 
-## Encoding bytes
-
-Bytes measure what a client and server would exchange over a network. When upstream has a serialiser, use it. When it has none, as VeriSimplePIR does, encode each element in the fewest whole bytes its bit width needs, packed tightly, which is what upstream's size formulas count. In-memory representations, such as two 64-bit limbs per multi-limb element, count toward `client_storage_bytes`, not toward communication.
-| `stale_record`, `bad_proof`, `drop_server` | | | P7. Usage error (exit 2) until then. |
-
 For a baseline arm (S0-go, S0-cpp, M0), a fault shows up as `correct=false` with `detected=null`. That is the threat verification removes. For a verifiable arm, `detected=true` means the client rejected the answer.
 
 VeriSimplePIR rejects answers and parameter sets with `assert`, which aborts the whole process. So the C++ adapter runs parameter selection and every fault-injected verification in a `fork()`ed child. A child that aborts means `unsupported_params` or `detected=true`, and the parent still writes the record.
+
+## Encoding bytes
+
+Bytes measure what a client and server would exchange over a network. When upstream has a serialiser, use it. When it has none, as VeriSimplePIR does, encode each element in the fewest whole bytes its bit width needs, packed tightly, which is what upstream's size formulas count. In-memory representations, such as two 64-bit limbs per multi-limb element, count toward `client_storage_bytes`, not toward communication.
 
 ## Conformance test
 
 `tests/test_adapters.py` runs every built adapter through the spec §11 checks: `test_correctness`, `test_fault_detection`, `test_fault_baseline` and `test_comm_analytical`. Gate G1 passes when it passes for all eight arms:
 
 ```sh
-make build && uv run pytest tests/test_adapters.py
+make build && make conformance
 ```
+
+`make conformance` (`harness/conformance.py`) runs the test in parallel partitions, one per slow S4 run, and refuses to start unless the partitions cover every collected test exactly once. It writes each partition's log and a `SUMMARY.md` to `logs/p1/<UTC time>/`. `notebooks/02_g1_conformance.ipynb` runs it, and the README's G1 row cites that cell. `uv run pytest tests/test_adapters.py -k ...` still runs any subset directly.

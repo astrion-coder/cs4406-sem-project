@@ -15,7 +15,7 @@ PINS := \
 	verisimplepir,https://github.com/leodec/verisimplepir,3643bb7cbaae02da98a195c4d004d4d083e3ab88 \
 	apir-code,https://github.com/dedis/apir-code,35cabd62fb898926f5bea6035caeae39091e091d
 
-.PHONY: setup patch build adapters test sysinfo
+.PHONY: setup patch build adapters test conformance sysinfo
 
 setup:
 	for pin in $(PINS); do \
@@ -74,6 +74,9 @@ adapters:
 
 test:
 	uv run python -m cs4406_sem_project.harness.upstream_tests $(if $(ONLY),--only $(ONLY))
+
+conformance: adapters
+	uv run python -m cs4406_sem_project.harness.conformance
 
 sysinfo:
 	uv run python -m cs4406_sem_project.harness.sysinfo --json env/sysinfo.json --platform-file env/reference_platform.txt

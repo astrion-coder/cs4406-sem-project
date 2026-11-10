@@ -38,5 +38,6 @@ Measurement machine: Apple M1 Pro, 8 cores (6 performance + 2 efficiency), 17179
 | Claim | Value | Source |
 |---|---|---|
 | Gate G0: every P0 upstream suite builds and passes natively on this Mac | 3 of 3 suites passed: simplepir `go test`, apir-code `go test` at `35cabd6` (`TestReal*` skipped, they need the SKS key dump), VeriSimplePIR `pir_test` | `01_g0_upstream_tests.ipynb`, cell 1 [exec 1] |
+| Gate G1: every configuration passes the adapter conformance test | 56 of 56 tests passed for S0-go, S0-cpp, S1, S2, S3, S4, M0 and M1, at 1 MiB with 100 repetitions per check, at the three pinned upstream commits | `02_g1_conformance.ipynb`, cell 1 [exec 1] |
 
 # Just for test

@@ -14,7 +14,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER_DIR = Path(os.environ.get("VPIR_ADAPTER_DIR", ROOT / "build" / "adapters"))
 REPS = int(os.environ.get("VPIR_CONFORMANCE_REPS", "100"))
-TIMEOUT_S = float(os.environ.get("VPIR_CONFORMANCE_TIMEOUT", "1800"))
+# Sized for the slowest run, S4 wrong_record at 1 MiB: the DDH digest, then two server answers
+# per query (the honest one and the substitute), with other partitions running alongside.
+TIMEOUT_S = float(os.environ.get("VPIR_CONFORMANCE_TIMEOUT", "7200"))
 DB_BYTES = 1 << 20
 SEED = 1234
 WARMUP = 1
