@@ -31,6 +31,7 @@ type config struct {
 	fault                string
 	faultProb            float64
 	recovery             string
+	replicasCheat        bool
 	out                  string
 }
 
@@ -64,7 +65,7 @@ func parseArgs(args []string) (config, error) {
 	fs.IntVar(&cfg.reps, "reps", 0, "recorded repetitions per phase")
 	fs.IntVar(&cfg.warmup, "warmup", 0, "warm-up repetitions per phase, recorded with is_warmup=true")
 	fs.Uint64Var(&cfg.seed, "seed", 0, "seed for the database, query indices and faults")
-	fs.StringVar(&cfg.fault, "fault", "", "none, flip_answer_bit or wrong_record")
+	fs.StringVar(&cfg.fault, "fault", "", "none, flip_answer_bit, wrong_record, stale_record or drop_server")
 	probSet := false
 	fs.Func("fault-prob", "chance that each online repetition is faulted (default 1.0 when --fault is not none)", func(v string) error {
 		p, err := strconv.ParseFloat(v, 64)
@@ -74,12 +75,13 @@ func parseArgs(args []string) (config, error) {
 		cfg.faultProb, probSet = p, true
 		return nil
 	})
-	fs.StringVar(&cfg.recovery, "recovery", "abort", "abort (the only policy until P7)")
+	fs.StringVar(&cfg.recovery, "recovery", "abort", "abort or switch_replica (verifiable arms only)")
+	fs.BoolVar(&cfg.replicasCheat, "replicas-cheat", false, "fault every replica that switch_replica turns to")
 	fs.StringVar(&cfg.out, "out", "", "JSONL file the records are appended to")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `usage: apir-adapter --arm ARM --db-bytes N --record-bytes N --phase offline|online|all
                     --reps N --warmup N --seed N --fault KIND [--fault-prob F]
-                    [--recovery abort] --out PATH.jsonl`)
+                    [--recovery abort|switch_replica] [--replicas-cheat] --out PATH.jsonl`)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -117,8 +119,11 @@ func parseArgs(args []string) (config, error) {
 	if !probSet && cfg.fault != "none" {
 		cfg.faultProb = 1
 	}
-	if cfg.recovery != "abort" {
-		return cfg, usageError{fmt.Sprintf("--recovery %q is not supported; only abort exists until P7, and retry_same is never allowed", cfg.recovery)}
+	switch {
+	case cfg.recovery == "abort":
+	case cfg.recovery == "switch_replica" && a.verifiable:
+	default:
+		return cfg, usageError{fmt.Sprintf("--recovery %q is not supported by arm %s (retry_same is never allowed, re_preprocess needs a preprocessing proof)", cfg.recovery, cfg.armName)}
 	}
 	return cfg, nil
 }
@@ -240,66 +245,174 @@ func runOffline(cfg config, c cell, w *recordWriter) (cost offlineCost, ran bool
 	return cost, ran, nil
 }
 
+// attempt is one query and its answers, from query generation to the
+// client's verdict. A missing answer (drop_server) counts as a rejection.
+type attempt struct {
+	qs, rs    span
+	answerS   []span
+	up, down  []int
+	out       []byte
+	honestOut []byte
+	rejected  bool
+	dropped   bool
+	panicMsg  string
+	refused   string // why the adapter did not call upstream's reconstruction
+}
+
+// decodeGuard is a cell whose upstream reconstruction a faulted answer can
+// drive into an allocation this machine cannot hold. refuseDecode says why it
+// must not run, or returns "".
+type decodeGuard interface {
+	refuseDecode(answers [][]byte) string
+}
+
+// doAttempt runs one query for index. inject, when non-nil, changes the
+// answers before the client sees them. checkFlip also reconstructs the honest
+// answer first, so the caller can compare it with the faulted output.
+func doAttempt(c cell, index int, inject func(queries, answers [][]byte), checkFlip bool) (a attempt, err error) {
+	queries, qs := c.query(index)
+	answers := make([][]byte, len(queries))
+	a.qs, a.answerS = qs, make([]span, len(queries))
+	for k, q := range queries {
+		answers[k], a.answerS[k] = c.answer(k, q)
+	}
+	a.up = lens(queries)
+	if checkFlip {
+		var scratch span
+		if a.honestOut, err = c.reconstruct(answers, &scratch); err != nil {
+			return a, fmt.Errorf("honest reconstruction rejected before fault injection: %w", err)
+		}
+	}
+	faulted := inject != nil
+	if faulted {
+		inject(queries, answers)
+	}
+	a.down = lens(answers) // a withheld (nil) answer sends 0 bytes
+	for _, ans := range answers {
+		if ans == nil {
+			a.dropped = true
+		}
+	}
+	if a.dropped {
+		a.rejected = true
+		return a, nil
+	}
+	if g, ok := c.(decodeGuard); ok {
+		if a.refused = g.refuseDecode(answers); a.refused != "" {
+			a.rejected = true
+			return a, nil
+		}
+	}
+	a.out, a.rejected, a.panicMsg = reconstructGuarded(c, answers, &a.rs, faulted)
+	return a, nil
+}
+
+// recoveryBudget is the number of further attempts after the first rejection
+// (the k of the disabled retry_same, contract "Recovery").
+const recoveryBudget = 3
+
 func runOnline(cfg config, c cell, w *recordWriter, storage int) error {
 	indices := rand.New(stream(cfg.seed, "index"))
 	faults := rand.New(stream(cfg.seed, "fault"))
+	if cfg.fault == "stale_record" {
+		logf("%s: building the stale database", cfg.armName)
+		c.buildStale()
+	}
 	checkedFlip := false
 	n := cfg.warmup + cfg.reps
 	for rep := 0; rep < n; rep++ {
 		index := indices.IntN(cfg.geom.nRecords)
 		runtime.GC()
-		queries, qs := c.query(index)
-		answers := make([][]byte, len(queries))
-		answerS := make([]span, len(queries))
-		for k, q := range queries {
-			answers[k], answerS[k] = c.answer(k, q)
-		}
-		up, down := lens(queries), lens(answers)
-
 		faulted := cfg.fault != "none" && faults.Float64() < cfg.faultProb
-		var honestOut []byte
-		if faulted && !checkedFlip && cfg.fault == "flip_answer_bit" {
-			var scratch span
-			out, err := c.reconstruct(answers, &scratch)
-			if err != nil {
-				return fmt.Errorf("honest reconstruction rejected before fault injection: %w", err)
-			}
-			honestOut = out
-		}
+		var inject func(queries, answers [][]byte)
 		if faulted {
-			injectFault(cfg, c, faults, index, answers)
+			inject = func(queries, answers [][]byte) { injectFault(cfg, c, faults, index, queries, answers) }
 		}
-		var rs span
-		out, rejected, panicMsg := reconstructGuarded(c, answers, &rs, faulted)
-		if honestOut != nil {
-			if !rejected && bytes.Equal(out, honestOut) {
+		first, err := doAttempt(c, index, inject, faulted && !checkedFlip && cfg.fault == "flip_answer_bit")
+		if err != nil {
+			return err
+		}
+		if first.honestOut != nil {
+			if !first.rejected && bytes.Equal(first.out, first.honestOut) {
 				return fmt.Errorf("rep %d: flip_answer_bit left the client's output unchanged; the flip rule picks a bit the output does not depend on", rep)
 			}
 			checkedFlip = true
-			logf("%s: rep %d: checked that the flipped bit changes the honest output (rejected=%v)", cfg.armName, rep, rejected)
+			logf("%s: rep %d: checked that the flipped bit changes the honest output (rejected=%v)", cfg.armName, rep, first.rejected)
 		}
-		if panicMsg != "" {
-			logf("%s: rep %d: reconstruction of a faulted answer panicked, recorded as rejected: %s", cfg.armName, rep, panicMsg)
+		if first.panicMsg != "" {
+			logf("%s: rep %d: reconstruction of a faulted answer panicked, recorded as rejected: %s", cfg.armName, rep, first.panicMsg)
+		}
+		if first.refused != "" {
+			logf("%s: rep %d: reconstruction not called, recorded as rejected: %s", cfg.armName, rep, first.refused)
+		}
+
+		truth := c.truth(index)
+		accepted := !first.rejected
+		outcome, attempts := "accepted", 0
+		var rec recoveryCost
+		switch {
+		case accepted && bytes.Equal(first.out, truth):
+		case accepted:
+			outcome = "silent_wrong"
+		case cfg.arm.verifiable && cfg.recovery == "switch_replica":
+			outcome = "aborted"
+			for attempts < recoveryBudget {
+				attempts++
+				var inj func(queries, answers [][]byte)
+				if cfg.replicasCheat && cfg.fault != "none" && faults.Float64() < cfg.faultProb {
+					inj = func(queries, answers [][]byte) { injectFault(cfg, c, faults, index, queries, answers) }
+				}
+				a, err := doAttempt(c, index, inj, false)
+				if err != nil {
+					return err
+				}
+				rec.add(a)
+				if a.panicMsg != "" {
+					logf("%s: rep %d attempt %d: reconstruction of a faulted answer panicked, recorded as rejected: %s", cfg.armName, rep, attempts, a.panicMsg)
+				}
+				if a.refused != "" {
+					logf("%s: rep %d attempt %d: reconstruction not called, recorded as rejected: %s", cfg.armName, rep, attempts, a.refused)
+				}
+				if a.rejected {
+					continue
+				}
+				outcome = "recovered"
+				if !bytes.Equal(a.out, truth) {
+					outcome = "silent_wrong"
+				}
+				break
+			}
+		default:
+			outcome = "aborted"
 		}
 
 		r := w.base
 		r.Phase, r.Rep, r.IsWarmup, r.Faulted = "online", rep, rep < cfg.warmup, faulted
 		r.SchemeParams = c.params()
-		a := c.analytical()
-		r.Analytical.UpBytes, r.Analytical.DownBytes = a.UpBytes, a.DownBytes
+		an := c.analytical()
+		r.Analytical.UpBytes, r.Analytical.DownBytes = an.UpBytes, an.DownBytes
 		m := &r.Metrics
-		m.QueryGenS, m.QueryGenCPUS = ptr(qs.wall), ptr(qs.cpu)
-		m.UpBytes, m.UpBytesPerServer = ptr(sum(up)), up
-		m.DownBytes, m.DownBytesPerServer = ptr(sum(down)), down
-		for _, s := range answerS {
+		m.QueryGenS, m.QueryGenCPUS = ptr(first.qs.wall), ptr(first.qs.cpu)
+		m.UpBytes, m.UpBytesPerServer = ptr(sum(first.up)), first.up
+		m.DownBytes, m.DownBytesPerServer = ptr(sum(first.down)), first.down
+		for _, s := range first.answerS {
 			m.ServerAnswerS = append(m.ServerAnswerS, s.wall)
 			m.ServerAnswerCPUS = append(m.ServerAnswerCPUS, s.cpu)
 		}
-		m.ClientRecoverS, m.ClientRecoverCPUS = ptr(rs.wall), ptr(rs.cpu)
+		if first.refused == "" {
+			m.ClientRecoverS, m.ClientRecoverCPUS = ptr(first.rs.wall), ptr(first.rs.cpu)
+		}
 		m.VerifyFused = ptr(cfg.arm.verifiable)
-		r.Correct = ptr(!rejected && bytes.Equal(out, c.truth(index)))
+		r.RecoveryOutcome, r.RecoveryAttempts = ptr(outcome), ptr(attempts)
+		if attempts > 0 {
+			m.RecoveryS, m.RecoveryCPUS = ptr(rec.wall), ptr(rec.cpu)
+			m.RecoveryUpBytes, m.RecoveryDownBytes = ptr(rec.up), ptr(rec.down)
+		}
+		if !first.dropped {
+			r.Correct = ptr(accepted && bytes.Equal(first.out, truth))
+		}
 		if cfg.arm.verifiable {
-			r.Detected = ptr(rejected)
+			r.Detected = ptr(first.rejected)
 		}
 		if err := w.write(r); err != nil {
 			return err
@@ -311,9 +424,29 @@ func runOnline(cfg config, c cell, w *recordWriter, storage int) error {
 	return nil
 }
 
+// recoveryCost sums the scheme calls and messages of the attempts after the
+// first rejection.
+type recoveryCost struct {
+	wall, cpu float64
+	up, down  int
+}
+
+func (r *recoveryCost) add(a attempt) {
+	spans := append([]span{a.qs, a.rs}, a.answerS...)
+	for _, s := range spans {
+		r.wall += s.wall
+		r.cpu += s.cpu
+	}
+	r.up += sum(a.up)
+	r.down += sum(a.down)
+}
+
 // injectFault changes the serialised answers before the client parses them
-// (contract fault table). Both faults hit one server, chosen at random.
-func injectFault(cfg config, c cell, rng *rand.Rand, index int, answers [][]byte) {
+// (contract fault table). flip_answer_bit and wrong_record hit one server,
+// chosen at random. drop_server withholds that server's answer. stale_record
+// answers every query from the stale database, as a replica set that missed
+// an update would.
+func injectFault(cfg config, c cell, rng *rand.Rand, index int, queries, answers [][]byte) {
 	k := rng.IntN(len(answers))
 	switch cfg.fault {
 	case "flip_answer_bit":
@@ -322,6 +455,12 @@ func injectFault(cfg config, c cell, rng *rand.Rand, index int, answers [][]byte
 	case "wrong_record":
 		other := (index + 1 + rng.IntN(cfg.geom.nRecords-1)) % cfg.geom.nRecords
 		answers[k] = c.shadowAnswer(other, k)
+	case "drop_server":
+		answers[k] = nil
+	case "stale_record":
+		for s, q := range queries {
+			answers[s] = c.staleAnswer(s, q)
+		}
 	}
 }
 

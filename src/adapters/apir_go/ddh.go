@@ -18,7 +18,7 @@ type ddhCell struct {
 	rows, cols int
 	data       []byte // the seeded database, bit i is data[i]&1
 	db         *database.Elliptic
-	srv        *server.DH
+	srv, stale *server.DH
 	cli, other *client.DH
 }
 
@@ -95,3 +95,17 @@ func (c *ddhCell) flipBits(int) []bitRange {
 }
 
 func (c *ddhCell) truth(index int) []byte { return []byte{c.data[index] & 1} }
+
+func (c *ddhCell) buildStale() {
+	flipped := make([]byte, len(c.data))
+	for i, b := range c.data {
+		flipped[i] = b ^ 1
+	}
+	c.stale = server.NewDH(database.CreateRandomEllipticWithDigest(bytes.NewReader(flipped), c.g.dbBits, group.P256, true))
+}
+
+func (c *ddhCell) staleAnswer(_ int, q []byte) []byte {
+	a, err := c.stale.AnswerBytes(q)
+	must(err)
+	return a
+}

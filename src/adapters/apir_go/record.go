@@ -3,31 +3,33 @@ package main
 // Record is one line of --out. Its fields are exactly the adapter contract's
 // (src/adapters/README.md). Pointer and slice fields marshal to null when unset.
 type Record struct {
-	RunID         *string        `json:"run_id"`
-	GitSHAHarness *string        `json:"git_sha_harness"`
-	Platform      *string        `json:"platform"`
-	UpstreamSHA   string         `json:"upstream_sha"`
-	Adapter       string         `json:"adapter"`
-	Arm           string         `json:"arm"`
-	SchemeParams  map[string]any `json:"scheme_params"`
-	DBBytes       int            `json:"db_bytes"`
-	RecordBytes   *int           `json:"record_bytes"`
-	RetrievedBits int            `json:"retrieved_bits"`
-	NRecords      int            `json:"n_records"`
-	Phase         string         `json:"phase"`
-	Rep           int            `json:"rep"`
-	IsWarmup      bool           `json:"is_warmup"`
-	Seed          uint64         `json:"seed"`
-	Fault         string         `json:"fault"`
-	FaultProb     float64        `json:"fault_prob"`
-	Faulted       bool           `json:"faulted"`
-	Recovery      string         `json:"recovery"`
-	Status        string         `json:"status"`
-	Metrics       Metrics        `json:"metrics"`
-	Analytical    Analytical     `json:"analytical"`
-	Correct       *bool          `json:"correct"`
-	Detected      *bool          `json:"detected"`
-	Error         *string        `json:"error"`
+	RunID            *string        `json:"run_id"`
+	GitSHAHarness    *string        `json:"git_sha_harness"`
+	Platform         *string        `json:"platform"`
+	UpstreamSHA      string         `json:"upstream_sha"`
+	Adapter          string         `json:"adapter"`
+	Arm              string         `json:"arm"`
+	SchemeParams     map[string]any `json:"scheme_params"`
+	DBBytes          int            `json:"db_bytes"`
+	RecordBytes      *int           `json:"record_bytes"`
+	RetrievedBits    int            `json:"retrieved_bits"`
+	NRecords         int            `json:"n_records"`
+	Phase            string         `json:"phase"`
+	Rep              int            `json:"rep"`
+	IsWarmup         bool           `json:"is_warmup"`
+	Seed             uint64         `json:"seed"`
+	Fault            string         `json:"fault"`
+	FaultProb        float64        `json:"fault_prob"`
+	Faulted          bool           `json:"faulted"`
+	Recovery         string         `json:"recovery"`
+	RecoveryOutcome  *string        `json:"recovery_outcome"`
+	RecoveryAttempts *int           `json:"recovery_attempts"`
+	Status           string         `json:"status"`
+	Metrics          Metrics        `json:"metrics"`
+	Analytical       Analytical     `json:"analytical"`
+	Correct          *bool          `json:"correct"`
+	Detected         *bool          `json:"detected"`
+	Error            *string        `json:"error"`
 }
 
 // Metrics carries every metric key in every record. Keys of the other phase,
@@ -58,6 +60,10 @@ type Metrics struct {
 	ClientVerifyS            *float64  `json:"client_verify_s"`
 	ClientVerifyCPUS         *float64  `json:"client_verify_cpu_s"`
 	VerifyFused              *bool     `json:"verify_fused"`
+	RecoveryS                *float64  `json:"recovery_s"`
+	RecoveryCPUS             *float64  `json:"recovery_cpu_s"`
+	RecoveryUpBytes          *int      `json:"recovery_up_bytes"`
+	RecoveryDownBytes        *int      `json:"recovery_down_bytes"`
 	ProcessPeakRSSBytes      *int64    `json:"process_peak_rss_bytes"`
 }
 

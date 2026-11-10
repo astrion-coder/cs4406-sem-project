@@ -2,10 +2,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
+	"fmt"
 
 	"github.com/si-co/vpir-code/lib/client"
 	"github.com/si-co/vpir-code/lib/database"
 	"github.com/si-co/vpir-code/lib/server"
+	"github.com/si-co/vpir-code/lib/utils"
 )
 
 // xorCell is M0 (classic two-server PIR) and M1 (the same scheme over a
@@ -18,8 +21,9 @@ type xorCell struct {
 	merkle     bool
 	data       []byte // the seeded database, record i at data[i*rb:(i+1)*rb]
 	db         *database.Bytes
-	srv        [2]*server.PIR
+	srv, stale [2]*server.PIR
 	cli, other *client.PIR
+	row        int // the row the main client last queried, as its upstream state holds it
 }
 
 func newXORCell(g geometry, seed uint64, merkle bool) *xorCell {
@@ -72,7 +76,44 @@ func (c *xorCell) setup() offlineCost {
 func (c *xorCell) query(index int) ([][]byte, span) {
 	var qs [][]byte
 	sp := timed(func() { qs = c.cli.Query(index, len(c.srv)) })
+	c.row, _ = utils.VectorToMatrixIndices(index, c.db.NumColumns)
 	return qs, sp
+}
+
+// refuseDecode stops M1 answers that upstream cannot decode without
+// allocating far more memory than this machine has. reconstructPIR XORs the
+// queried row's blocks, unpads the sum and passes its last ProofLen bytes to
+// merkle.DecodeProof, which makes a slice of as many hashes as the proof's
+// first four bytes say before reading any of them. A corrupted sum makes that
+// count random, up to 2^32 slice headers (96 GiB). When the count is larger
+// than a block can hold, the read that follows always panics, so the answer is
+// rejected either way and the adapter skips the call.
+func (c *xorCell) refuseDecode(answers [][]byte) string {
+	if !c.merkle {
+		return ""
+	}
+	bs := c.db.BlockSize
+	sum := make([]byte, bs)
+	for _, a := range answers {
+		if len(a) < (c.row+1)*bs {
+			return ""
+		}
+		for i, b := range a[c.row*bs : (c.row+1)*bs] {
+			sum[i] ^= b
+		}
+	}
+	// UnPadBlock: trailing zeros, then the 0x80 pad byte.
+	trimmed := bytes.TrimRight(sum, "\x00")
+	if len(trimmed) <= c.db.ProofLen {
+		return "" // upstream's own slicing fails first, with no large allocation
+	}
+	block := trimmed[:len(trimmed)-1]
+	n := binary.LittleEndian.Uint32(block[len(block)-c.db.ProofLen:])
+	if 4+32*uint64(n) <= uint64(bs) {
+		return ""
+	}
+	return fmt.Sprintf("the decoded Merkle proof claims %d hashes, more than a %d-byte block holds, so merkle.DecodeProof would allocate %.1f GiB of slice headers and then panic",
+		n, bs, float64(n)*24/(1<<30))
 }
 
 func (c *xorCell) answer(k int, q []byte) ([]byte, span) {
@@ -110,3 +151,21 @@ func (c *xorCell) truth(index int) []byte {
 	rb := c.g.recordBytes
 	return c.data[index*rb : (index+1)*rb]
 }
+
+func (c *xorCell) buildStale() {
+	flipped := make([]byte, len(c.data))
+	for i, b := range c.data {
+		flipped[i] = ^b
+	}
+	var db *database.Bytes
+	if c.merkle {
+		db = database.CreateRandomMerkle(bytes.NewReader(flipped), c.g.dbBits, c.g.rows, c.g.recordBytes)
+	} else {
+		db = database.CreateRandomBytes(bytes.NewReader(flipped), c.g.dbBits, c.g.rows, c.g.recordBytes)
+	}
+	for k := range c.stale {
+		c.stale[k] = server.NewPIR(db, 1)
+	}
+}
+
+func (c *xorCell) staleAnswer(k int, q []byte) []byte { return c.stale[k].Answer(q) }

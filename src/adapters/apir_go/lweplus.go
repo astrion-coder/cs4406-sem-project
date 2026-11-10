@@ -26,6 +26,7 @@ type lwePlusCell struct {
 	db         *database.LWE
 	p          *utils.ParamsLWE
 	srv        *server.Amplify
+	stale      *server.Amplify
 	cli, other *client.Amplify
 }
 
@@ -38,13 +39,28 @@ func newLWEPlusCell(g geometry, seed uint64) (cell, error) {
 	c := &lwePlusCell{g: g, seed: seed, tECC: t, bits: streamBytes(seed, "db", rows*cols/8+1)}
 	// Same layout as database.CreateRandomBinaryLWE, built here so the digest,
 	// which that constructor computes inline, can be timed on its own in setup.
-	m := matrix.NewBytes(rows, cols)
-	for i := 0; i < m.Len(); i++ {
-		m.SetData(i, (c.bits[i/8]>>(i%8))&1)
-	}
-	c.db = &database.LWE{Matrix: m, Info: database.Info{NumRows: rows, NumColumns: cols, BlockSize: 1}}
+	c.db = c.layout(rows, cols, 0)
 	c.p = utils.ParamsWithDatabaseSize(rows, cols)
 	return c, nil
+}
+
+// layout is the bit matrix with every bit xor flip.
+func (c *lwePlusCell) layout(rows, cols int, flip byte) *database.LWE {
+	m := matrix.NewBytes(rows, cols)
+	for i := 0; i < m.Len(); i++ {
+		m.SetData(i, ((c.bits[i/8]>>(i%8))&1)^flip)
+	}
+	return &database.LWE{Matrix: m, Info: database.Info{NumRows: rows, NumColumns: cols, BlockSize: 1}}
+}
+
+func (c *lwePlusCell) buildStale() {
+	db := c.layout(c.db.NumRows, c.db.NumColumns, 1)
+	db.Auth = &database.Auth{DigestLWE: database.Digest(db, c.p.L)}
+	c.stale = server.NewAmplify(db)
+}
+
+func (c *lwePlusCell) staleAnswer(_ int, q []byte) []byte {
+	return matrix.MatricesToBytes(c.stale.Answer(matrix.BytesToMatrices(q)))
 }
 
 func (c *lwePlusCell) params() map[string]any {

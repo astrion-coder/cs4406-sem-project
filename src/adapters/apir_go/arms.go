@@ -20,7 +20,7 @@ type arm struct {
 	build func(g geometry, seed uint64) (cell, error)
 }
 
-var onlineFaults = map[string]bool{"none": true, "flip_answer_bit": true, "wrong_record": true}
+var onlineFaults = map[string]bool{"none": true, "flip_answer_bit": true, "wrong_record": true, "stale_record": true, "drop_server": true}
 
 var arms = map[string]arm{
 	"S3": {servers: 1, oneBit: true, verifiable: true, faults: onlineFaults, build: newLWEPlusCell},
@@ -53,6 +53,13 @@ type cell interface {
 	// flipBits are the bits of one server's answer that the honest client's
 	// output for the record at index depends on (contract fault rule).
 	flipBits(index int) []bitRange
+	// buildStale builds, once and untimed, a server over the stale database:
+	// the current one with every bit of every record flipped, made with the
+	// library's own constructors and the same layout.
+	buildStale()
+	// staleAnswer is the given stale server's answer to a query the main
+	// client generated.
+	staleAnswer(server int, q []byte) []byte
 	truth(index int) []byte
 }
 

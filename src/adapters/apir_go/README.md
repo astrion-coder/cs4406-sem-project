@@ -76,7 +76,24 @@ Faults change the serialised answer of one server, chosen at random from the fau
   On the first faulted repetition the adapter also reconstructs the honest answer and exits 1 if the flip leaves the output unchanged.
 - `wrong_record` replaces one server's answer with that server's honest answer to a query for a different, random index. A second client instance makes that query, so the main client's state is untouched.
 
-If reconstruction of a faulted answer panics, the adapter records `detected=true` and logs the panic to stderr. A panic on an honest answer still exits 1. M1 panics this way. `merkle.DecodeProof` reads the hash count from the corrupted proof, allocates a slice of that many entries (up to 2^32), and then slices past the end of the proof. So M1 `wrong_record` runs take several seconds per repetition and reach a peak RSS of several GB at 1 MiB. That is the library's behaviour, and it shows up in `client_recover_s` and `process_peak_rss_bytes`.
+- `stale_record` answers every query from a stale server (all servers for M0 and M1), built once and untimed by `buildStale` with upstream's own constructors over the database with every bit of every record flipped, in the same layout. The client's offline state still matches the current database.
+  - S3: `database.Digest` over the flipped bit matrix, then `server.NewAmplify`.
+  - S4: `CreateRandomEllipticWithDigest` over the flipped bits, which recomputes the row digests, then `server.NewDH`.
+  - M0: `CreateRandomBytes` over the complemented bytes.
+  - M1: `CreateRandomMerkle` over the complemented bytes. That builds a different tree, so the proofs fail against the client's root.
+  - The judge runs S4 at 64 KiB because the S4 digest is slow.
+- `drop_server` lets every server compute and time its answer, then sets one server's answer (chosen from the fault stream) to nil. That answer adds 0 to `down_bytes` and to its `down_bytes_per_server` entry. The client is not called, `correct` is null, and the repetition counts as rejected. For M0 the outcome is `aborted` and `detected` stays null.
+- `bad_proof` and `re_preprocess` do not apply to these arms and exit 2, as does `switch_replica` for M0 (no verification, so nothing to reject).
+
+If reconstruction of a faulted answer panics, the adapter records `detected=true` and logs the panic to stderr. A panic on an honest answer still exits 1.
+
+M1 has a second guard (`refuseDecode` in `xorpir.go`). `merkle.DecodeProof` reads the hash count from the first 4 bytes of the proof, allocates a slice of that many entries, and only then reads the hashes. A corrupted answer makes the count random, so one call can reserve up to 2^32 slice headers (96 GiB). A cheating `wrong_record` run with `switch_replica --replicas-cheat` reached a 217 GB memory footprint and was killed by macOS at repetition 15. Before calling upstream, the adapter rebuilds the bytes `reconstructPIR` would pass to `DecodeProof`: the XOR of the queried row's blocks, unpadded as `UnPadBlock` does. When the count is more than a block can hold (`4 + 32·count > BlockSize`), the hash reads that follow always panic, so the outcome is the same rejection. The adapter records `detected=true`, logs "reconstruction not called" with the count, and leaves `client_recover_s` null for that answer. A smaller count allocates at most a block's worth and goes to upstream as usual. This means a malicious M1 server can make the upstream client try to allocate up to 96 GiB, which is a finding about the library and not something the adapter adds.
+
+## Recovery
+
+`--recovery switch_replica` (S3, S4, M1) makes up to 3 further attempts after the first rejection. Each is a fresh query for the same index from the main client, answered by honest server objects. An honest replica is a model, not a second database: upstream answers are deterministic functions of the database and the query (spec 6.1), and for M1 the same two honest servers stand in for another honest pair. With `--replicas-cheat`, each attempt draws from the fault stream and, with probability `--fault-prob`, is faulted in the same way as the first (one more `injectFault` call, so a stale replica answers from the stale server). A missing answer counts as a rejection.
+
+`recovery_s` and `recovery_cpu_s` sum the same scheme-call timers as the first attempt (`query_gen`, every server's answer, reconstruction) over the further attempts. An M1 decode the adapter refused adds no reconstruction time. Serialisation and the fault injection itself stay outside, as everywhere else. `recovery_up_bytes` and `recovery_down_bytes` sum the encoded messages of those attempts as the client receives them, so a withheld answer adds 0. The outcome is `recovered` when an attempt is accepted with the correct record, `aborted` when 3 attempts are rejected, and `silent_wrong` when any accepted record is wrong. `abort` records `aborted` with 0 attempts. Offline records carry null for the recovery fields.
 
 ## Scheme parameters
 
