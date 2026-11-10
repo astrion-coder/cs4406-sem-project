@@ -89,7 +89,7 @@ Applied to serialised bytes or to a decoded copy of them, never in library code.
 | `wrong_record` | the honest answer to a fresh query for a different record replaces the answer |
 | `flip_hint_bit` | online records: one bit of the client's hint, flipped for that repetition's `Recover` and flipped back. Offline records: one uniform bit of a copy of the hint (no record is queried offline), flagged `faulted`, with `correct` and `detected` null because S0-go has no offline check. |
 | `stale_record` | the answer comes from a second upstream database over the record-bit-flipped data (every byte of every record complemented), laid out as the honest one is (same entries, decision 11 pieces in one column) and squished as `Setup` leaves it, then answered by upstream `Answer` on the client's real query. Built once at start-up, untimed, and only when this fault is requested. The client keeps the honest hint, so decoding yields a wrong record and the outcome is `silent_wrong`. |
-| `drop_server` | no answer reaches the client. The record has `faulted=true`, `correct` null, the answer and client metrics null and `down_bytes` null, and outcome `aborted`. |
+| `drop_server` | the server computes its answer and withholds it, so no answer reaches the client. The record has `faulted=true`, `server_answer_s` timed, `down_bytes` 0, `correct` null, the client metrics null, and outcome `aborted`. |
 
 `bad_proof` is a usage error (exit 2) because S0-go has no proof.
 

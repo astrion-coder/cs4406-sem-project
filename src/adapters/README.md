@@ -110,7 +110,7 @@ Faults are injected only here, in the adapter, by changing the serialised server
 | `wrong_record` | online | all | replaces the answer with the honest answer to a different index |
 | `flip_hint_bit` | offline and online | S0-go, S0-cpp, S1, S2 | flips one random bit of the hint the client downloads, chosen among the bits the queried record's decoding depends on. In an offline record, S1 and S2 report whether preprocessing verification rejected it. In an online record, the corrupted hint is used for that repetition's reconstruction, which is where a baseline shows the effect. |
 | `stale_record` | online | all | answers from a stale database, the current one with every bit of every record flipped, so every record differs, including one-bit records. The client's offline state still matches the current database. The adapter builds the stale server once, untimed. |
-| `drop_server` | online | all | withholds the answer of one server, chosen from the fault stream. The client reconstructs nothing from that query. |
+| `drop_server` | online | all | withholds the answer of one server, chosen from the fault stream. That server still computes the answer, and its `server_answer_s` is recorded. The answer is never sent, so it adds 0 to `down_bytes`, to its entry in `down_bytes_per_server` and to `recovery_down_bytes`. The client reconstructs nothing from that query, so `correct` is null. |
 | `bad_proof` | offline | S1, S2 | flips one bit of the preprocessing proof (`PreprocProve`'s output), below the proof's norm bound, so `PreprocVerify` sees a changed value. Spec §5.1 lists it for S2. S1 makes the same preprocessing calls (decision 4), so it applies there too. |
 
 A uniformly random bit usually cannot change the answer. It may fall outside the rows that hold the record, or below the rounding threshold of a lattice ciphertext, where it disappears in decoding. Such a fault demonstrates nothing, for a baseline or a verifiable arm, so the adapter picks a bit that matters:
@@ -156,7 +156,7 @@ and these metrics, null in offline records and when `recovery_attempts` is 0:
 | `recovery_s`, `recovery_cpu_s` | all work after the first rejection: queries, answers, decoding and verification, plus the offline phase for `re_preprocess` |
 | `recovery_up_bytes`, `recovery_down_bytes` | bytes those attempts exchanged, offline bytes included |
 
-`correct` and `detected` describe the first answer, as before. The outcome covers every attempt: `silent_wrong` means the record the client finally accepted is wrong, on the first attempt or a later one, so `recovered` always ends with the correct record. A baseline's outcome is `accepted` or `silent_wrong`, or `aborted` for `drop_server`. The analysis derives the time to a correct answer from the first attempt's times plus `recovery_s`.
+`correct` and `detected` describe the first answer, as before. The outcome covers every attempt: `silent_wrong` means the record the client finally accepted is wrong, on the first attempt or a later one, so `recovered` always ends with the correct record. A baseline's outcome is `accepted` or `silent_wrong`, or `aborted` for `drop_server`. The analysis derives the time to a correct answer from the first attempt's times plus `recovery_s`. No adapter models how long a client waits before it gives up on a withheld answer, so under `drop_server` that time is a lower bound.
 
 ## Encoding bytes
 

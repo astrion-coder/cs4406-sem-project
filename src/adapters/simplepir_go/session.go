@@ -361,6 +361,7 @@ func (s *session) onlineRecord(rep, warmup int) (Record, error) {
 		m.QueryGenS, m.QueryGenCPUS = f64(qg.wall), f64(qg.cpu)
 		m.UpBytes, m.UpBytesPerServer = i64(int64(len(qBytes))), []int64{int64(len(qBytes))}
 		m.ServerAnswerS, m.ServerAnswerCPUS = []float64{sa.wall}, []float64{sa.cpu}
+		m.DownBytes, m.DownBytesPerServer = i64(0), []int64{0}
 		m.ProcessPeakRSSBytes = peakRSS()
 		rec.Metrics = m
 		rec.Analytical = s.analytical()

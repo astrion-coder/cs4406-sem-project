@@ -177,6 +177,9 @@ def _check_recovery_record(arm: Arm, rec: dict) -> None:
         v = metrics[name]
         if attempts == 0:
             assert v is None, f"{where}: {name}={v!r} but recovery_attempts is 0"
+        elif name == "recovery_down_bytes" and rec["fault"] == "drop_server":
+            # A withheld answer sends nothing: a single server whose every attempt drops downloads 0.
+            assert _int(v) and v >= 0, f"{where}: {name}={v!r} after {attempts} attempts"
         elif name.endswith("bytes"):
             assert _int(v) and v > 0, f"{where}: {name}={v!r} after {attempts} attempts"
         else:
@@ -268,6 +271,15 @@ def test_drop_server_aborts(arm, run):
             f"{arm.name} rep {r['rep']}: outcome {r['recovery_outcome']!r}"
         )
         assert r["recovery_attempts"] == 0
+        assert r["correct"] is None, f"{arm.name} rep {r['rep']}: nothing reconstructed, correct={r['correct']!r}"
+        per_server, answer_s = r["metrics"]["down_bytes_per_server"], r["metrics"]["server_answer_s"]
+        assert isinstance(per_server, list) and 0 in per_server, (
+            f"{arm.name} rep {r['rep']}: withheld answer counted, down_bytes_per_server={per_server!r}"
+        )
+        assert r["metrics"]["down_bytes"] == sum(per_server)
+        assert isinstance(answer_s, list) and len(answer_s) == len(per_server) and all(map(_num, answer_s)), (
+            f"{arm.name} rep {r['rep']}: server_answer_s={answer_s!r}"
+        )
     assert not [r for r in recs if r["recovery_outcome"] == "recovered"]
 
 
