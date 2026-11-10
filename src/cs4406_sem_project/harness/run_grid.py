@@ -191,6 +191,7 @@ class Runner:
     execute: Execute = field(default_factory=default_execute)
     watch: Callable[[], Watch] = field(default_factory=default_watch)
     log: Callable[[str], None] = lambda msg: print(msg, file=sys.stderr, flush=True)
+    program: str = "run_grid"  # the module a live lock holder runs
 
     def final_path(self, c: Cell) -> Path:
         return self.run_dir / f"{c.cell_id}.jsonl"
@@ -198,8 +199,11 @@ class Runner:
     def pending(self) -> list[Cell]:
         return [c for c in self.cells if not self.final_path(c).exists()]
 
+    def adapter_args(self, c: Cell, out: Path) -> list[str]:
+        return c.adapter_args(out)
+
     def argv(self, c: Cell, out: Path) -> list[str]:
-        cmd = [*self.launcher, str(self.adapter_dir / c.binary), *c.adapter_args(out)]
+        cmd = [*self.launcher, str(self.adapter_dir / c.binary), *self.adapter_args(c, out)]
         if sys.platform == "darwin":
             cmd = ["caffeinate", "-dims", *cmd]  # spec 7: no sleep during a timing run
         return cmd
@@ -292,7 +296,7 @@ class Runner:
             pid = int(lock.read_text() or 0)
             if pid != os.getpid() and psutil.pid_exists(pid):
                 try:
-                    alive = "run_grid" in " ".join(psutil.Process(pid).cmdline())
+                    alive = self.program in " ".join(psutil.Process(pid).cmdline())
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     alive = False
                 if alive:
