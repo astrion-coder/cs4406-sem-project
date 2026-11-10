@@ -1,0 +1,281 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/astrion-coder/cs4406-sem-project/harness/schema.json",
+  "title": "VPIR bench result record",
+  "description": "One line of results/raw/<run_id>/*.jsonl. Spec 6 and 9, src/adapters/README.md and docs/serve_protocol.md define the fields. Five record kinds share the file format: adapter rows in bench and client mode, harness rows for cells that failed, serve-mode summaries and load-generator rows.",
+  "oneOf": [
+    {"$ref": "#/$defs/adapter_record"},
+    {"$ref": "#/$defs/harness_failure"},
+    {"$ref": "#/$defs/serve_summary"},
+    {"$ref": "#/$defs/loadgen_record"}
+  ],
+  "$defs": {
+    "arm": {"enum": ["S0-go", "S0-cpp", "S1", "S2", "S3", "S4", "M0", "M1"]},
+    "adapter": {"enum": ["simplepir_go", "apir_go", "vsp_cpp"]},
+    "fault": {"enum": ["none", "flip_answer_bit", "flip_hint_bit", "wrong_record", "stale_record", "bad_proof", "drop_server"]},
+    "recovery": {"enum": ["abort", "switch_replica", "re_preprocess"]},
+    "phase": {"enum": ["offline", "online"]},
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+    "nstr": {"type": ["string", "null"]},
+    "count": {"type": "integer", "minimum": 0},
+    "ncount": {"type": ["integer", "null"], "minimum": 0},
+    "nsec": {"type": ["number", "null"], "minimum": 0},
+    "nbool": {"type": ["boolean", "null"]},
+    "per_server_sec": {
+      "type": ["array", "null"],
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {"type": ["number", "null"], "minimum": 0}
+    },
+    "per_server_bytes": {
+      "type": ["array", "null"],
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {"type": "integer", "minimum": 0}
+    },
+    "metrics": {
+      "description": "Every key from both phases, null where it does not apply (src/adapters/README.md, Metrics). Client records add rtt_s and rtt_cpu_s.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "public_params_s", "public_params_cpu_s",
+        "server_preproc_s", "server_preproc_cpu_s",
+        "server_preproc_proof_s", "server_preproc_proof_cpu_s",
+        "client_offline_s", "client_offline_cpu_s",
+        "offline_down_bytes", "offline_down_bytes_hint_only", "offline_up_bytes", "client_storage_bytes",
+        "query_gen_s", "query_gen_cpu_s",
+        "up_bytes", "up_bytes_per_server",
+        "server_answer_s", "server_answer_cpu_s",
+        "down_bytes", "down_bytes_per_server",
+        "client_recover_s", "client_recover_cpu_s",
+        "client_verify_s", "client_verify_cpu_s",
+        "verify_fused",
+        "recovery_s", "recovery_cpu_s", "recovery_up_bytes", "recovery_down_bytes",
+        "process_peak_rss_bytes"
+      ],
+      "properties": {
+        "public_params_s": {"$ref": "#/$defs/nsec"},
+        "public_params_cpu_s": {"$ref": "#/$defs/nsec"},
+        "server_preproc_s": {"$ref": "#/$defs/nsec"},
+        "server_preproc_cpu_s": {"$ref": "#/$defs/nsec"},
+        "server_preproc_proof_s": {"$ref": "#/$defs/nsec"},
+        "server_preproc_proof_cpu_s": {"$ref": "#/$defs/nsec"},
+        "client_offline_s": {"$ref": "#/$defs/nsec"},
+        "client_offline_cpu_s": {"$ref": "#/$defs/nsec"},
+        "offline_down_bytes": {"$ref": "#/$defs/ncount"},
+        "offline_down_bytes_hint_only": {"$ref": "#/$defs/ncount"},
+        "offline_up_bytes": {"$ref": "#/$defs/ncount"},
+        "client_storage_bytes": {"$ref": "#/$defs/ncount"},
+        "query_gen_s": {"$ref": "#/$defs/nsec"},
+        "query_gen_cpu_s": {"$ref": "#/$defs/nsec"},
+        "up_bytes": {"$ref": "#/$defs/ncount"},
+        "up_bytes_per_server": {"$ref": "#/$defs/per_server_bytes"},
+        "server_answer_s": {"$ref": "#/$defs/per_server_sec"},
+        "server_answer_cpu_s": {"$ref": "#/$defs/per_server_sec"},
+        "down_bytes": {"$ref": "#/$defs/ncount"},
+        "down_bytes_per_server": {"$ref": "#/$defs/per_server_bytes"},
+        "client_recover_s": {"$ref": "#/$defs/nsec"},
+        "client_recover_cpu_s": {"$ref": "#/$defs/nsec"},
+        "client_verify_s": {"$ref": "#/$defs/nsec"},
+        "client_verify_cpu_s": {"$ref": "#/$defs/nsec"},
+        "verify_fused": {"$ref": "#/$defs/nbool"},
+        "recovery_s": {"$ref": "#/$defs/nsec"},
+        "recovery_cpu_s": {"$ref": "#/$defs/nsec"},
+        "recovery_up_bytes": {"$ref": "#/$defs/ncount"},
+        "recovery_down_bytes": {"$ref": "#/$defs/ncount"},
+        "process_peak_rss_bytes": {"$ref": "#/$defs/ncount"},
+        "rtt_s": {"$ref": "#/$defs/per_server_sec"},
+        "rtt_cpu_s": {"$ref": "#/$defs/per_server_sec"}
+      }
+    },
+    "analytical": {
+      "description": "Upstream's own size formulas. Formulas can give fractional bytes, so values are numbers.",
+      "type": ["object", "null"],
+      "required": ["up_bytes", "down_bytes", "offline_down_bytes_hint_only"],
+      "additionalProperties": {"type": ["number", "null"], "minimum": 0}
+    },
+    "harness_info": {
+      "description": "Added by run_grid.py to every harness_failure row.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exit_code", "wall_s", "peak_footprint_bytes", "timeout_s", "mem_cap_bytes", "stderr_tail"],
+      "properties": {
+        "exit_code": {"type": ["integer", "null"]},
+        "wall_s": {"type": "number", "minimum": 0},
+        "peak_footprint_bytes": {"$ref": "#/$defs/ncount"},
+        "timeout_s": {"type": "number", "minimum": 0},
+        "mem_cap_bytes": {"$ref": "#/$defs/count"},
+        "stderr_tail": {"type": "string"}
+      }
+    },
+    "adapter_record": {
+      "description": "One row per repetition and phase, written by an adapter in bench mode (mode absent or 'bench') or client mode.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id", "git_sha_harness", "platform", "upstream_sha", "adapter", "arm", "scheme_params",
+        "db_bytes", "record_bytes", "retrieved_bits", "n_records", "phase", "rep", "is_warmup", "seed",
+        "fault", "fault_prob", "faulted", "recovery", "recovery_outcome", "recovery_attempts",
+        "status", "metrics", "analytical", "correct", "detected", "error"
+      ],
+      "properties": {
+        "mode": {"enum": ["bench", "client"]},
+        "run_id": {"$ref": "#/$defs/nstr"},
+        "git_sha_harness": {"$ref": "#/$defs/nstr"},
+        "platform": {"$ref": "#/$defs/nstr"},
+        "upstream_sha": {"$ref": "#/$defs/sha"},
+        "adapter": {"$ref": "#/$defs/adapter"},
+        "arm": {"$ref": "#/$defs/arm"},
+        "scheme_params": {"type": "object"},
+        "db_bytes": {"type": "integer", "minimum": 1},
+        "record_bytes": {"type": ["integer", "null"], "minimum": 1},
+        "retrieved_bits": {"type": "integer", "minimum": 1},
+        "n_records": {"type": "integer", "minimum": 1},
+        "phase": {"$ref": "#/$defs/phase"},
+        "rep": {"$ref": "#/$defs/count"},
+        "is_warmup": {"type": "boolean"},
+        "seed": {"$ref": "#/$defs/count"},
+        "fault": {"$ref": "#/$defs/fault"},
+        "fault_prob": {"type": "number", "minimum": 0, "maximum": 1},
+        "faulted": {"type": "boolean"},
+        "recovery": {"$ref": "#/$defs/recovery"},
+        "recovery_outcome": {"enum": ["accepted", "recovered", "aborted", "silent_wrong", null]},
+        "recovery_attempts": {"$ref": "#/$defs/ncount"},
+        "status": {"enum": ["ok", "unsupported_params"]},
+        "metrics": {"$ref": "#/$defs/metrics"},
+        "analytical": {"$ref": "#/$defs/analytical"},
+        "correct": {"$ref": "#/$defs/nbool"},
+        "detected": {"$ref": "#/$defs/nbool"},
+        "error": {"$ref": "#/$defs/nstr"},
+        "fake_preproc": {"type": "boolean"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"mode": {"const": "client"}}, "required": ["mode"]},
+          "then": {"properties": {"metrics": {"required": ["rtt_s", "rtt_cpu_s"]}}},
+          "else": {"properties": {"metrics": {"not": {"anyOf": [{"required": ["rtt_s"]}, {"required": ["rtt_cpu_s"]}]}}}}
+        },
+        {
+          "if": {"properties": {"arm": {"enum": ["S3", "S4"]}}},
+          "then": {"properties": {"record_bytes": {"const": null}, "retrieved_bits": {"const": 1}}},
+          "else": {"properties": {"record_bytes": {"type": "integer"}}}
+        }
+      ]
+    },
+    "harness_failure": {
+      "description": "Written by run_grid.py when an adapter process ended without writing every record: status oom (memory cap), timeout, or crash (nonzero exit). Spec 9: failed cells are results.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id", "git_sha_harness", "platform", "adapter", "arm", "cell_id", "db_bytes", "record_bytes",
+        "phase", "seed", "fault", "fault_prob", "recovery", "reps", "warmup", "status", "error", "harness"
+      ],
+      "properties": {
+        "run_id": {"type": "string"},
+        "git_sha_harness": {"$ref": "#/$defs/nstr"},
+        "platform": {"type": "string"},
+        "adapter": {"$ref": "#/$defs/adapter"},
+        "arm": {"$ref": "#/$defs/arm"},
+        "cell_id": {"type": "string"},
+        "db_bytes": {"type": "integer", "minimum": 1},
+        "record_bytes": {"type": ["integer", "null"], "minimum": 1},
+        "phase": {"$ref": "#/$defs/phase"},
+        "seed": {"$ref": "#/$defs/count"},
+        "fault": {"$ref": "#/$defs/fault"},
+        "fault_prob": {"type": "number", "minimum": 0, "maximum": 1},
+        "recovery": {"$ref": "#/$defs/recovery"},
+        "reps": {"$ref": "#/$defs/count"},
+        "warmup": {"$ref": "#/$defs/count"},
+        "status": {"enum": ["oom", "timeout", "crash"]},
+        "error": {"type": "string"},
+        "partial_rows": {"$ref": "#/$defs/count"},
+        "harness": {"$ref": "#/$defs/harness_info"}
+      }
+    },
+    "serve_summary": {
+      "description": "The one record a server appends to --out on SIGTERM (docs/serve_protocol.md, Command lines): the INFO fields except scheme_params, plus the final STATS.",
+      "type": "object",
+      "required": [
+        "mode", "protocol", "arm", "server_id", "servers", "db_bytes", "record_bytes", "n_records", "seed",
+        "workers", "upstream_sha", "db_sha256", "public_seed",
+        "wall_s", "cpu_user_s", "cpu_sys_s", "peak_rss_bytes", "answered", "queued"
+      ],
+      "properties": {
+        "mode": {"const": "serve"},
+        "protocol": {"const": 1},
+        "arm": {"$ref": "#/$defs/arm"},
+        "server_id": {"enum": [0, 1]},
+        "servers": {"enum": [1, 2]},
+        "db_bytes": {"type": "integer", "minimum": 1},
+        "record_bytes": {"type": ["integer", "null"], "minimum": 1},
+        "n_records": {"type": "integer", "minimum": 1},
+        "seed": {"$ref": "#/$defs/count"},
+        "workers": {"type": "integer", "minimum": 1},
+        "upstream_sha": {"$ref": "#/$defs/sha"},
+        "db_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "public_seed": {"type": ["string", "null"], "pattern": "^[0-9a-f]*$"},
+        "wall_s": {"type": "number", "minimum": 0},
+        "cpu_user_s": {"type": "number", "minimum": 0},
+        "cpu_sys_s": {"type": "number", "minimum": 0},
+        "peak_rss_bytes": {"$ref": "#/$defs/count"},
+        "answered": {"$ref": "#/$defs/count"},
+        "queued": {"$ref": "#/$defs/count"},
+        "run_id": {"$ref": "#/$defs/nstr"},
+        "git_sha_harness": {"$ref": "#/$defs/nstr"},
+        "platform": {"$ref": "#/$defs/nstr"}
+      }
+    },
+    "loadgen_record": {
+      "description": "One row per load-generator run (RQ6, RQ7, gate G7), written by src/loadgen/. Draft until SG-7 builds the load generator. Latencies are observed (docs/serve_protocol.md, What the load generator measures); e2e_* add the corpus entry's client-side times.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode", "run_id", "git_sha_harness", "platform", "arm", "db_bytes", "record_bytes", "seed", "workers",
+        "loop", "clients", "offered_load_qps", "run", "warmup_s", "window_s",
+        "sent", "completed", "mismatched", "errors", "throughput_qps",
+        "lat_p50_s", "lat_p95_s", "lat_p99_s", "e2e_lat_p50_s", "e2e_lat_p95_s", "e2e_lat_p99_s",
+        "server_cpu_util", "server_peak_rss_bytes", "loadgen_cpu_util", "status", "error"
+      ],
+      "properties": {
+        "mode": {"const": "loadgen"},
+        "run_id": {"type": "string"},
+        "git_sha_harness": {"$ref": "#/$defs/nstr"},
+        "platform": {"type": "string"},
+        "arm": {"$ref": "#/$defs/arm"},
+        "db_bytes": {"type": "integer", "minimum": 1},
+        "record_bytes": {"type": ["integer", "null"], "minimum": 1},
+        "seed": {"$ref": "#/$defs/count"},
+        "workers": {"type": "integer", "minimum": 1},
+        "loop": {"enum": ["closed", "open"]},
+        "clients": {"type": ["integer", "null"], "minimum": 1},
+        "offered_load_qps": {"type": ["number", "null"], "minimum": 0},
+        "run": {"$ref": "#/$defs/count"},
+        "warmup_s": {"type": "number", "minimum": 0},
+        "window_s": {"type": "number", "exclusiveMinimum": 0},
+        "sent": {"$ref": "#/$defs/count"},
+        "completed": {"$ref": "#/$defs/count"},
+        "mismatched": {"$ref": "#/$defs/count"},
+        "errors": {"$ref": "#/$defs/count"},
+        "throughput_qps": {"type": "number", "minimum": 0},
+        "lat_p50_s": {"$ref": "#/$defs/nsec"},
+        "lat_p95_s": {"$ref": "#/$defs/nsec"},
+        "lat_p99_s": {"$ref": "#/$defs/nsec"},
+        "e2e_lat_p50_s": {"$ref": "#/$defs/nsec"},
+        "e2e_lat_p95_s": {"$ref": "#/$defs/nsec"},
+        "e2e_lat_p99_s": {"$ref": "#/$defs/nsec"},
+        "server_cpu_util": {"type": ["number", "null"], "minimum": 0},
+        "server_peak_rss_bytes": {"$ref": "#/$defs/ncount"},
+        "loadgen_cpu_util": {"type": ["number", "null"], "minimum": 0},
+        "status": {"enum": ["ok", "saturated", "error"]},
+        "error": {"$ref": "#/$defs/nstr"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"loop": {"const": "closed"}}},
+          "then": {"properties": {"clients": {"type": "integer"}, "offered_load_qps": {"const": null}}},
+          "else": {"properties": {"offered_load_qps": {"type": "number"}}}
+        }
+      ]
+    }
+  }
+}
