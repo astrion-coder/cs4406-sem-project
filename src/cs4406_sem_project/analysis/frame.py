@@ -34,6 +34,7 @@ def _flatten(row: dict) -> dict:
         "retrieved_bits": row["retrieved_bits"], "phase": row["phase"], "rep": row["rep"],
         "mode": row.get("mode", "bench"), "correct": row["correct"], "detected": row["detected"],
         "padding_factor": row["scheme_params"].get("padding_factor"),
+        "scheme_params": json.dumps(row["scheme_params"], sort_keys=True),
     }
     for key, value in m.items():
         if key in PER_SERVER:
@@ -53,6 +54,7 @@ def _derive(df: pd.DataFrame) -> pd.DataFrame:
     df["offline_bytes"] = df["offline_down_bytes"] + z("offline_up_bytes")
     df["client_online_s"] = df["query_gen_s"] + df["client_recover_s"] + z("client_verify_s")
     df["server_online_s"] = df["server_answer_s_max"]
+    df["user_time_s"] = df["client_online_s"] + df["server_online_s"]  # Colombo et al.'s "user time" (p.3845)
     df["server_offline_s"] = df["server_preproc_s"] + z("server_preproc_proof_s")
     df["throughput_GBps"] = df["db_bytes"] / 1e9 / df["server_answer_s_max"]
     return df
@@ -67,7 +69,7 @@ def rows_to_frame(rows: Iterable[dict]) -> pd.DataFrame:
         return df
     for col in df.columns:
         if df[col].dtype == object and col not in ("run_id", "arm", "adapter", "phase", "mode",
-                                                    "correct", "detected"):
+                                                    "correct", "detected", "scheme_params"):
             df[col] = pd.to_numeric(df[col], errors="coerce")
     df = _derive(df).replace([np.inf, -np.inf], np.nan)
     return df.sort_values(KEY + ["phase", "rep"]).reset_index(drop=True)
