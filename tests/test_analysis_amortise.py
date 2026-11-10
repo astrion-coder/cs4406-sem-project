@@ -62,3 +62,10 @@ def test_amortised_table_covers_every_q():
     t = amortise.amortised_table(pd.DataFrame([costs(offline_bytes=1e6, online_bytes=10) | {"arm": "S1"}]))
     assert list(t.Q) == list(amortise.QS)
     assert t.bytes.is_monotonic_decreasing and math.isclose(t.bytes.iloc[-1], 110)
+
+
+def test_total_time_is_client_plus_server_and_has_a_break_even():
+    a = costs(client_offline_s=4.0, client_online_s=1.0, server_offline_s=6.0, server_online_s=1.0)
+    b = costs(client_online_s=2.0, server_online_s=2.0)
+    assert amortise.amortised_total_s(a, 10) == pytest.approx(1.0 + 2.0)
+    assert amortise.break_even_Q(a, b, "total_s") == 5

@@ -61,7 +61,12 @@ def amortised_server_s(costs, q: int):
     return costs["server_offline_s"] / q + costs["server_online_s"]
 
 
-AMORTISED = {"bytes": amortised_bytes, "client_s": amortised_client_s, "server_s": amortised_server_s}
+def amortised_total_s(costs, q: int):
+    return amortised_client_s(costs, q) + amortised_server_s(costs, q)
+
+
+AMORTISED = {"bytes": amortised_bytes, "client_s": amortised_client_s, "server_s": amortised_server_s,
+             "total_s": amortised_total_s}
 
 
 def break_even_Q(a, b, kind: str = "bytes") -> int | None:
