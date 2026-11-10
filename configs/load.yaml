@@ -1,0 +1,26 @@
+# RQ6 (concurrent clients) and RQ7 (server cores), spec 5.1. src/loadgen reads this file.
+# Cells come from the focus tier in grid.yaml. The corpus is replayed round-robin (docs/serve_protocol.md).
+
+corpus_queries: 64  # serve_protocol.md: no library caches between queries, so 64 suffices
+warmup_s: 10
+window_s: 60
+runs: 3
+
+closed_loop:
+  clients: [1, 2, 4, 8, 16, 32, 64]
+  stop_when_p95_over: 10  # x the C = 1 p95 latency
+  workers: 6  # the reference Mac's performance cores (spec 7)
+
+open_loop:
+  # Fractions of the saturation throughput the closed loop measured for the same arm and cell.
+  offered_load_fraction: [0.10, 0.25, 0.50, 0.75, 0.90, 1.00, 1.10]
+  arrivals: poisson
+  workers: 6
+
+multicore:
+  workers: [1, 2, 4, 6]
+  clients: 16  # enough queued queries to keep W = 6 workers busy (G6 ran 16 clients at W = 6)
+  reps: 30
+
+# Gate G7, spec 11 test_loadgen_not_bottleneck: load-generator CPU below this at the highest C used.
+loadgen_cpu_limit_pct: 70
