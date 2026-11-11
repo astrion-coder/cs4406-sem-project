@@ -1,0 +1,7 @@
+apir-adapter: S4: laying out 65536-byte database (seed 1234)
+apir-adapter: S4: untimed offline phase
+apir-adapter: S4: rep 0: checked that the flipped bit changes the honest output (rejected=true)
+apir-adapter: S4: online rep 10/31
+apir-adapter: S4: online rep 20/31
+apir-adapter: S4: online rep 30/31
+apir-adapter: S4: online rep 31/31

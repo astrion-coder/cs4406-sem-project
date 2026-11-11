@@ -1,0 +1,64 @@
+apir-adapter: M1: laying out 134217728-byte database (seed 1234)
+apir-adapter: M1: untimed offline phase
+apir-adapter: M1: rep 1: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 16678743 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.4 GiB of slice headers and then panic
+apir-adapter: M1: rep 2: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 311788456 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 7.0 GiB of slice headers and then panic
+apir-adapter: M1: rep 3: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 1641501870 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 36.7 GiB of slice headers and then panic
+apir-adapter: M1: rep 5: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 1885708290 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 42.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 6: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 14383374 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.3 GiB of slice headers and then panic
+apir-adapter: M1: online rep 10/101
+apir-adapter: M1: rep 11: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 2348723 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 12: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 7728107 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.2 GiB of slice headers and then panic
+apir-adapter: M1: rep 13: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 8553091 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.2 GiB of slice headers and then panic
+apir-adapter: M1: rep 14: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 2062676130 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 46.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 15: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 9475366 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.2 GiB of slice headers and then panic
+apir-adapter: M1: rep 16: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 5636134 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 17: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 4429289 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 18: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 2600339566 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 58.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 19: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 7799816 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.2 GiB of slice headers and then panic
+apir-adapter: M1: online rep 20/101
+apir-adapter: M1: rep 20: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 3795332534 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 84.8 GiB of slice headers and then panic
+apir-adapter: M1: rep 21: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 2590074 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 22: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 2621970870 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 58.6 GiB of slice headers and then panic
+apir-adapter: M1: rep 23: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 16385221 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.4 GiB of slice headers and then panic
+apir-adapter: M1: rep 27: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 1161795907 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 26.0 GiB of slice headers and then panic
+apir-adapter: M1: online rep 30/101
+apir-adapter: M1: rep 35: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 6074833 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 38: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 562110028 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 12.6 GiB of slice headers and then panic
+apir-adapter: M1: rep 39: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 7334157 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.2 GiB of slice headers and then panic
+apir-adapter: M1: online rep 40/101
+apir-adapter: M1: rep 42: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 14963498 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.3 GiB of slice headers and then panic
+apir-adapter: M1: rep 44: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 365907735 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 8.2 GiB of slice headers and then panic
+apir-adapter: M1: rep 47: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 794577 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.0 GiB of slice headers and then panic
+apir-adapter: M1: rep 49: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 3059816570 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 68.4 GiB of slice headers and then panic
+apir-adapter: M1: online rep 50/101
+apir-adapter: M1: rep 57: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 2414495 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 58: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 2679286784 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 59.9 GiB of slice headers and then panic
+apir-adapter: M1: rep 59: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 496203 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.0 GiB of slice headers and then panic
+apir-adapter: M1: online rep 60/101
+apir-adapter: M1: rep 60: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 2306139 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 61: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 539687952 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 12.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 63: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 4106048533 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 91.8 GiB of slice headers and then panic
+apir-adapter: M1: rep 66: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 5047816 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 68: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 417379229 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 9.3 GiB of slice headers and then panic
+apir-adapter: M1: rep 69: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 15157965 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.3 GiB of slice headers and then panic
+apir-adapter: M1: online rep 70/101
+apir-adapter: M1: rep 70: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 16354762 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.4 GiB of slice headers and then panic
+apir-adapter: M1: rep 71: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 4195802360 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 93.8 GiB of slice headers and then panic
+apir-adapter: M1: rep 72: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 1517138600 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 33.9 GiB of slice headers and then panic
+apir-adapter: M1: rep 73: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 3239630 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 76: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 12214579 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.3 GiB of slice headers and then panic
+apir-adapter: M1: rep 79: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 3075720508 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 68.7 GiB of slice headers and then panic
+apir-adapter: M1: online rep 80/101
+apir-adapter: M1: rep 82: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 3155477 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 84: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 6394579 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 85: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 10989838 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.2 GiB of slice headers and then panic
+apir-adapter: M1: rep 87: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 3785245346 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 84.6 GiB of slice headers and then panic
+apir-adapter: M1: rep 88: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 12998834 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.3 GiB of slice headers and then panic
+apir-adapter: M1: online rep 90/101
+apir-adapter: M1: rep 90: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 1860430561 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 41.6 GiB of slice headers and then panic
+apir-adapter: M1: rep 93: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 3112025 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.1 GiB of slice headers and then panic
+apir-adapter: M1: rep 94: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 1093264562 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 24.4 GiB of slice headers and then panic
+apir-adapter: M1: rep 97: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 12586640 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 0.3 GiB of slice headers and then panic
+apir-adapter: M1: online rep 100/101
+apir-adapter: M1: rep 100: reconstruction not called, recorded as rejected: the decoded Merkle proof claims 2460992118 hashes, more than a 1577-byte block holds, so merkle.DecodeProof would allocate 55.0 GiB of slice headers and then panic
+apir-adapter: M1: online rep 101/101
