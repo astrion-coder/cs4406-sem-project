@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/si-co/vpir-code/lib/client"
 	"github.com/si-co/vpir-code/lib/database"
@@ -19,15 +20,16 @@ var tECCByBits = map[int]int{1 << 23: 4, 1 << 27: 5, 1 << 30: 6, 1 << 33: 7}
 // lwePlusCell is S3: client.NewAmplify runs 2*tECC+1 independent LWE
 // instances over one bit matrix and majority-decodes them.
 type lwePlusCell struct {
-	g          geometry
-	seed       uint64
-	tECC       int
-	bits       []byte // the seeded database, bit i at bits[i/8]>>(i%8)
-	db         *database.LWE
-	p          *utils.ParamsLWE
-	srv        *server.Amplify
-	stale      *server.Amplify
-	cli, other *client.Amplify
+	g         geometry
+	seed      uint64
+	tECC      int
+	bits      []byte // the seeded database, bit i at bits[i/8]>>(i%8)
+	db        *database.LWE
+	p         *utils.ParamsLWE
+	srv       *server.Amplify
+	stale     *server.Amplify
+	cli       *client.Amplify
+	shadowRnd io.Reader
 }
 
 func newLWEPlusCell(g geometry, seed uint64) (cell, error) {
@@ -88,7 +90,7 @@ func (c *lwePlusCell) setup() offlineCost {
 	c.db.Auth = &database.Auth{DigestLWE: digest}
 	c.srv = server.NewAmplify(c.db)
 	cl := timed(func() { c.cli = client.NewAmplify(stream(c.seed, "client"), &c.db.Info, c.p, c.tECC) })
-	c.other = client.NewAmplify(stream(c.seed, "shadow-client"), &c.db.Info, c.p, c.tECC)
+	c.shadowRnd = stream(c.seed, "shadow-client")
 	hint := len(matrix.MatrixToBytes(digest))
 	// The client also needs the 16-byte seed of the public matrix A.
 	full := hint + len(utils.SeedMatrixA)
@@ -119,7 +121,16 @@ func (c *lwePlusCell) reconstruct(answers [][]byte, sp *span) ([]byte, error) {
 
 func (c *lwePlusCell) shadowAnswer(index, _ int) []byte {
 	i, j := utils.VectorToMatrixIndices(index, c.p.M)
-	return matrix.MatricesToBytes(c.srv.Answer(c.other.Query(i, j)))
+	return matrix.MatricesToBytes(c.srv.Answer(c.shadowQuery(i, j)))
+}
+
+// shadowQuery uses a fresh client per query, all drawing from one stream.
+// Upstream's client keeps its last query's state, which holds each
+// instance's copy of the public matrix A (about 1.9 GB at 128 MiB). A
+// long-lived second client kept that alive beside the main client's for the
+// rest of the run, and the main client's queries slowed by about 60 %.
+func (c *lwePlusCell) shadowQuery(i, j int) []*matrix.Matrix {
+	return client.NewAmplify(c.shadowRnd, &c.db.Info, c.p, c.tECC).Query(i, j)
 }
 
 // flipBits is the bit at log2(q/p) = 31 of the queried column's element in
@@ -145,5 +156,5 @@ func (c *lwePlusCell) dbData() []byte { return c.bits }
 
 func (c *lwePlusCell) queryLens() []int {
 	i, j := utils.VectorToMatrixIndices(0, c.p.M)
-	return []int{len(matrix.MatricesToBytes(c.other.Query(i, j)))}
+	return []int{len(matrix.MatricesToBytes(c.shadowQuery(i, j)))}
 }

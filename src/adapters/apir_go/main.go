@@ -436,19 +436,22 @@ func runOnline(cfg config, c cell, w *recordWriter, storage int) error {
 	return nil
 }
 
-// recoveryCost sums the scheme calls and messages of the attempts after the
-// first rejection.
+// recoveryCost sums the attempts after the first rejection. Wall time counts
+// the servers of an attempt as answering in parallel, its slower answer, as
+// the first attempt's latency does (spec latency_e2e). CPU time sums all work.
 type recoveryCost struct {
 	wall, cpu float64
 	up, down  int
 }
 
 func (r *recoveryCost) add(a attempt) {
-	spans := append([]span{a.qs, a.rs}, a.answerS...)
-	for _, s := range spans {
-		r.wall += s.wall
+	slowest := 0.0
+	for _, s := range a.answerS {
+		slowest = max(slowest, s.wall)
 		r.cpu += s.cpu
 	}
+	r.wall += a.qs.wall + slowest + a.rs.wall
+	r.cpu += a.qs.cpu + a.rs.cpu
 	r.up += sum(a.up)
 	r.down += sum(a.down)
 }

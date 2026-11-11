@@ -153,7 +153,7 @@ and these metrics, null in offline records and when `recovery_attempts` is 0:
 
 | Metric | Meaning |
 |---|---|
-| `recovery_s`, `recovery_cpu_s` | all work after the first rejection: queries, answers, decoding and verification, plus the offline phase for `re_preprocess` |
+| `recovery_s`, `recovery_cpu_s` | all work after the first rejection: queries, answers, decoding and verification, plus the offline phase for `re_preprocess`. `recovery_s` counts a two-server attempt's servers as answering in parallel, so each attempt adds its slower answer, as `latency_e2e` does for the first attempt. `recovery_cpu_s` sums all of it |
 | `recovery_up_bytes`, `recovery_down_bytes` | bytes those attempts exchanged, offline bytes included |
 
 `correct` and `detected` describe the first answer, as before. The outcome covers every attempt: `silent_wrong` means the record the client finally accepted is wrong, on the first attempt or a later one, so `recovered` always ends with the correct record. A baseline's outcome is `accepted` or `silent_wrong`, or `aborted` for `drop_server`. The analysis derives the time to a correct answer from the first attempt's times plus `recovery_s`. No adapter models how long a client waits before it gives up on a withheld answer, so under `drop_server` that time is a lower bound.
