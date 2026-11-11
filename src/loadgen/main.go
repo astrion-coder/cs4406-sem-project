@@ -201,8 +201,7 @@ func run(args []string, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "loadgen:", err)
 		return exitError
 	}
-	fmt.Fprintf(stderr, "loadgen: %s %s run %d: %s, %d completed, %.1f q/s, %d unanswered, own CPU from %s
-",
+	fmt.Fprintf(stderr, "loadgen: %s %s run %d: %s, %d completed, %.1f q/s, %d unanswered, own CPU from %s\n",
 		row.Arm, o.cfg.Loop, o.lab.Run, row.Status, row.Completed, row.ThroughputQPS, res.Unanswered, cpuSource)
 	if row.Status == "error" {
 		fmt.Fprintln(stderr, "loadgen:", *row.Error)
