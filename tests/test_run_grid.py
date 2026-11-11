@@ -47,6 +47,13 @@ def test_smoke_tier_covers_every_arm():
     assert {c.arm for c in gridmod.expand(gridmod.load(), "smoke")} == set(gridmod.ARMS)
 
 
+def test_smoke_runs_s4_at_64_kib_and_one_bit_arms_without_records():
+    smoke = gridmod.expand(gridmod.load(), "smoke")
+    assert {c.db_bytes for c in smoke if c.arm == "S4"} == {64 << 10}  # spec v1.6, decision 10
+    assert all(c.record_bytes is None for c in smoke if c.arm in ("S3", "S4"))
+    assert {(c.db_bytes, c.record_bytes) for c in smoke if c.arm not in ("S3", "S4")} == {(1 << 20, 1024)}
+
+
 @pytest.mark.parametrize("text,n", [("32B", 32), ("1KiB", 1024), ("16MiB", 16 << 20), ("1GiB", 1 << 30), (7, 7)])
 def test_parse_size(text, n):
     assert gridmod.parse_size(text) == n

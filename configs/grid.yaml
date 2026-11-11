@@ -28,7 +28,10 @@ reps_full: &reps_full
   offline: {default: 5, "1GiB": 3}
 
 tiers:
-  smoke:  # spec 11: every arm at 1 MiB x 1 KiB x 3 reps, in under 10 minutes
+  # spec 11: every arm, 3 reps, under 10 minutes. The six record-size arms run at 1 MiB x 1 KiB. Under
+  # spec v1.6 S3 and S4 take no record size, and S4 runs at 64 KiB: at 1 MiB its offline phase alone is
+  # 4 digests of 342 s, about 23 min, against about 2 min at 64 KiB (notebooks/06_s4_cost.ipynb).
+  smoke:
     reps: {online: 3, offline: {default: 3}}
     sweep:
       arms: [S0-go, S0-cpp, S1, S2, M0, M1]
