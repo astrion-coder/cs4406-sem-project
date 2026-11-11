@@ -147,16 +147,22 @@ def load_estimates(path: Path) -> dict[tuple[str, int], dict[int, dict]]:
     return table
 
 
-def estimate_run_s(run: Run, table) -> tuple[float, str] | None:
-    """Upper bound on one Run's seconds and how its times were found, or None with no times for its cell."""
+def _cell_row(run: Run, table) -> tuple[dict, str] | None:
     sizes = table.get((run.arm, run.db_bytes))
     if not sizes:
         return None
     if run.record_bytes in sizes:
-        row, how = sizes[run.record_bytes], "measured"
-    else:
-        rb = max(sizes)
-        row, how = sizes[rb], f"larger measured record size {rb} B"
+        return sizes[run.record_bytes], "measured"
+    rb = max(sizes)
+    return sizes[rb], f"larger measured record size {rb} B"
+
+
+def estimate_run_s(run: Run, table) -> tuple[float, str] | None:
+    """Upper bound on one Run's seconds and how its times were found, or None with no times for its cell."""
+    found = _cell_row(run, table)
+    if found is None:
+        return None
+    row, how = found
     off, q, n = row["offline_s"], row["query_s"], run.expected_records
     if run.phase == "offline":
         return n * off, how
@@ -165,14 +171,35 @@ def estimate_run_s(run: Run, table) -> tuple[float, str] | None:
     return off + n * (attempts * q + reprep), how
 
 
-FORMULA = """upper bound per Run, from one measured offline_s and query_s per cell:
-  offline Run:             (reps + warmup) * offline_s
-  online Run, abort:       offline_s + (reps + warmup) * query_s
-  online Run, other policy: offline_s + (reps + warmup) * (4 * query_s)
-  online Run, re_preprocess: offline_s + (reps + warmup) * (4 * query_s + 3 * offline_s)
-(4 = the first attempt plus up to 3 more; every rep is assumed faulted and every attempt to be
-rejected. Not counted: database generation and the stale server that stale_record builds, both
-untimed in the adapter. A cell with no measured record size at its database size is left out.)"""
+def expected_run_s(run: Run, table) -> float | None:
+    """Expected seconds for one Run, when each attempt is faulted with probability fault_prob and an
+    honest replica never is (adapters README, "Recovery")."""
+    found = _cell_row(run, table)
+    if found is None:
+        return None
+    row, _ = found
+    off, q, n, f = row["offline_s"], row["query_s"], run.expected_records, run.fault_prob
+    if run.phase == "offline":
+        return n * off
+    if run.policy == "abort":
+        further = 0.0
+    elif run.policy == "switch_replica" and not run.replicas_cheat:
+        further = f
+    else:
+        further = sum(f ** k for k in range(1, MAX_ATTEMPTS))
+    reprep = further * off if run.policy == "re_preprocess" else 0.0
+    return off + n * ((1 + further) * q + reprep)
+
+
+FORMULA = """per Run, from one measured offline_s and query_s per cell, with n = reps + warmup:
+  offline Run:               n * offline_s
+  online Run, abort:         offline_s + n * query_s
+  online Run, other policy:  offline_s + n * ((1 + a) * query_s + r * offline_s)
+where a is the further attempts per query and r the repeated offline phases (re_preprocess only).
+  upper bound: a = 3, and r = 3 under re_preprocess (every attempt faulted and rejected)
+  expected:    a = r = f + f^2 + f^3 at fault rate f, or a = f under switch_replica to an honest replica
+Not counted: database generation and the stale server that stale_record builds, both untimed in
+the adapter. A cell with no measured record size at its database size is left out."""
 
 
 def dry_run(runs: list[Run], estimates: Path | None, out=sys.stdout) -> None:
@@ -194,6 +221,8 @@ def dry_run(runs: list[Run], estimates: Path | None, out=sys.stdout) -> None:
     p()
     p(FORMULA)
     seconds = {k: 0.0 for k in KINDS}
+    expected = {k: 0.0 for k in KINDS}
+    by_group: dict[tuple[str, str, str, int], float] = {}
     missing, borrowed = [], set()
     for r in runs:
         est = estimate_run_s(r, table)
@@ -201,13 +230,21 @@ def dry_run(runs: list[Run], estimates: Path | None, out=sys.stdout) -> None:
             missing.append((r.arm, r.db_bytes, r.record_bytes))
             continue
         seconds[r.kind] += est[0]
+        e = expected_run_s(r, table)
+        expected[r.kind] += e
+        group = (r.kind, r.arm, r.policy, r.db_bytes)
+        by_group[group] = by_group.get(group, 0.0) + e
         if est[1] != "measured":
             borrowed.add((r.arm, r.db_bytes, r.record_bytes, est[1]))
     p()
     for kind in KINDS:
         if any(r.kind == kind for r in runs):
-            p(f"{kind:8s} upper bound {seconds[kind] / 3600:9.1f} h")
-    p(f"{'total':8s} upper bound {sum(seconds.values()) / 3600:9.1f} h")
+            p(f"{kind:8s} upper bound {seconds[kind] / 3600:9.1f} h   expected {expected[kind] / 3600:9.1f} h")
+    p(f"{'total':8s} upper bound {sum(seconds.values()) / 3600:9.1f} h   expected {sum(expected.values()) / 3600:9.1f} h")
+    p()
+    p("expected hours by kind, arm, policy and database size, largest first:")
+    for (kind, arm, policy, db), s in sorted(by_group.items(), key=lambda kv: -kv[1])[:12]:
+        p(f"  {kind:8s} {arm:7s} {policy:15s} {db >> 20:5d} MiB {s / 3600:9.1f} h")
     for arm, db, rb, how in sorted(borrowed):
         p(f"  {arm} db {db} record {rb}: times taken from the {how}")
     for cell in sorted(set(missing)):

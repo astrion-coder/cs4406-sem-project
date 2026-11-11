@@ -1,0 +1,62 @@
+{
+ "run_id": "memory-ceiling-20261111T083621Z",
+ "git_sha": "4e65b6a33acb4f60137b72d1da1fd327f42bfcc8",
+ "dirty": false,
+ "adapters": {
+  "apir-adapter": "6dd2ca7a818779a63a15695c051b7ef35c927a1852313852e0fa0271320abd18",
+  "simplepir-adapter": "a610b36f54b63d95e51a80197572cb99b1b659a75bb2faf2a7474cafecbeeb30",
+  "vsp-adapter": "60839b1e22ccee61a08acd587577462dca87ef75baf1e4161e9105c909c147db"
+ },
+ "sysinfo": {
+  "machine": {
+   "cpu_model": "Apple M1 Pro",
+   "arch": "arm64",
+   "physical_cpus": 8,
+   "performance_cores": 6,
+   "efficiency_cores": 2,
+   "mem_total_bytes": 17179869184
+  },
+  "os": {
+   "version": "27.2",
+   "build": "26B123",
+   "kernel": "27.2.0"
+  },
+  "power": {
+   "source": "AC Power",
+   "low_power_mode": false
+  },
+  "load": {
+   "loadavg_1m": 2.12744140625,
+   "mem_available_bytes": 12136103936
+  },
+  "toolchain": {
+   "go": "go version go1.27.3 darwin/arm64",
+   "clang": "Homebrew clang version 23.1.4",
+   "openssl": "OpenSSL 3.5.9 29 Sep 2026 (Library: OpenSSL 3.5.9 29 Sep 2026)",
+   "python": "3.11.17",
+   "uv": "uv 0.13.6 (Homebrew 2026-10-26 aarch64-apple-darwin)"
+  },
+  "upstream": {
+   "apir-code": {
+    "sha": "35cabd62fb898926f5bea6035caeae39091e091d",
+    "dirty": true
+   },
+   "simplepir": {
+    "sha": "e9020b03bf2872c75b8954e749e32408b5db87ed",
+    "dirty": false
+   },
+   "verisimplepir": {
+    "sha": "3643bb7cbaae02da98a195c4d004d4d083e3ab88",
+    "dirty": true
+   }
+  },
+  "thread_env": {
+   "OMP_NUM_THREADS": null,
+   "OPENBLAS_NUM_THREADS": null,
+   "MKL_NUM_THREADS": null,
+   "NUMBA_NUM_THREADS": null,
+   "RAYON_NUM_THREADS": null
+  },
+  "captured_at": "2026-11-11T08:36:22.269647+00:00"
+ }
+}

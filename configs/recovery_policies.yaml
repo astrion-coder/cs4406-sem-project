@@ -24,12 +24,18 @@ faults:
 
 # Focus cells (spec 5.1): DB in {128 MiB, 1 GiB} x record in {32 B, 1 KiB}, every arm where it runs.
 # S3 and S4 retrieve one bit (record 0). S4 runs only up to 1 MiB (decision 10, spec v1.6), so it has
-# no focus cell. The spec lets the humans shrink this to 1 GiB x 1 KiB if time is short.
+# no focus cell. S1, S2 and S3 need more than 14 GiB at 1 GiB (notebooks/08_memory_ceiling.ipynb,
+# cell 2), so they have no 1 GiB cell on this Mac. M1 also needs more at 1 GiB with 32 B records but
+# not with 8 KiB ones; its 1 GiB x 32 B Runs stay and end oom at the cap.
+# The spec lets the humans shrink this to 1 GiB x 1 KiB if time is short.
 focus_cells:
   db_bytes: [134217728, 1073741824]
   record_bytes: [32, 1024]
 one_bit_arms: [S3, S4]
 max_db_bytes:
+  S1: 134217728
+  S2: 134217728
+  S3: 134217728
   S4: 1048576
 
 # Repetitions (spec 5.1): 100 trials per (arm, fault, policy), plus one warm-up.
@@ -48,4 +54,6 @@ cheating:
 seed: 1234
 # Per adapter process. Notebook 07's feasibility run gives the costs this has to cover.
 timeout_s: 14400
-memory_cap_gib: 10
+# The spec calls a cell oom above 16 GiB, the Mac's RAM; macOS and the editor need about 2 GiB of it.
+# M1 at 128 MiB x 32 B needs 11.7 GiB (notebook 08, cell 2).
+memory_cap_gib: 14

@@ -43,10 +43,15 @@ def test_online_trials_cover_every_fault_policy_and_cell():
     runs = of("trials", arm="S1")
     assert {r.fault for r in runs} == set(CONFIG["faults"]["online"])
     assert {r.policy for r in runs} == {"abort", "switch_replica", "re_preprocess"}
-    assert {(r.db_bytes, r.record_bytes) for r in runs} == {
+    assert {(r.db_bytes, r.record_bytes) for r in runs} == {(128 * MiB, rb) for rb in (32, 1024)}
+    assert {(r.db_bytes, r.record_bytes) for r in of("trials", arm="M1")} == {
         (d, rb) for d in (128 * MiB, 1024 * MiB) for rb in (32, 1024)}
     assert all(r.phase == "online" and r.reps == 100 and r.warmup == 1 and r.fault_prob == 1.0
                and not r.replicas_cheat for r in runs)
+
+
+def test_arms_over_14_gib_at_1_gib_have_no_1_gib_cell():
+    assert {r.arm for r in RUNS if r.db_bytes == 1024 * MiB} == {"S0-go", "S0-cpp", "M0", "M1"}
 
 
 def test_one_bit_arms_use_record_zero():
@@ -179,13 +184,25 @@ def test_dry_run_arithmetic(tmp_path):
     assert recovery.estimate_run_s(run(db_bytes=4 * MiB), table) is None
     assert recovery.estimate_run_s(run(arm="S0-go"), table) is None
 
+    assert recovery.expected_run_s(run(), table) == 50 + 4 * 5
+    assert recovery.expected_run_s(run(policy="switch_replica"), table) == 50 + 4 * 2 * 5
+    assert recovery.expected_run_s(run(policy="re_preprocess"), table) == 50 + 4 * (4 * 5 + 3 * 50)
+    sweep = run(kind="sweep", policy="re_preprocess", fault_prob=0.5)
+    assert recovery.expected_run_s(sweep, table) == 50 + 4 * (1.875 * 5 + 0.875 * 50)
+    cheating = run(kind="sweep", policy="switch_replica", fault_prob=0.5, replicas_cheat=True)
+    assert recovery.expected_run_s(cheating, table) == 50 + 4 * 1.875 * 5
+    assert recovery.expected_run_s(run(kind="sweep", policy="re_preprocess", fault_prob=0.0), table) == 50 + 4 * 5
+    assert recovery.expected_run_s(run(kind="offline", phase="offline"), table) == 4 * 50
+    assert recovery.expected_run_s(run(arm="S0-go"), table) is None
+
     runs = [run(), run(policy="switch_replica", record_bytes=1024), run(db_bytes=4 * MiB)]
     out = io.StringIO()
     recovery.dry_run(runs, est, out)
     text = out.getvalue()
     total_s = (50 + 4 * 5) + (100 + 4 * 4 * 10)
+    expected_s = (50 + 4 * 5) + (100 + 4 * 2 * 10)
     assert "3 Runs, 12 adapter repetitions" in text
-    assert f"total    upper bound {total_s / 3600:9.1f} h" in text
+    assert (f"total    upper bound {total_s / 3600:9.1f} h   expected {expected_s / 3600:9.1f} h") in text
     assert "no estimate for ('S1', " in text and "larger measured record size 8192" in text
 
 
