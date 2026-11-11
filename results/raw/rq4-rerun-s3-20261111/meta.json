@@ -1,0 +1,66 @@
+{
+ "run_id": "rq4-rerun-s3-20261111",
+ "git_sha": "b353acc5034ab1ad334e4265efd2ee1f67a7dd32",
+ "dirty": false,
+ "citable": true,
+ "seed": 1234,
+ "timeout_s": 14400,
+ "memory_cap_bytes": 15032385536,
+ "config_path": "/Users/imanchakraborty/cs4406-sem-project/configs/recovery_policies.yaml",
+ "config": "# RQ4 failure and recovery (spec 5.1 and 6.1). harness/recovery.py expands this into adapter runs.\n# Decision 12: the client never retries the same server, so retry_same is disabled for every arm.\n\n# Which policies each arm runs after a rejected answer. A baseline never rejects, so it only aborts\n# (its faults end silent_wrong, which is the threat verification removes).\npolicies:\n  S0-go: [abort]\n  S0-cpp: [abort]\n  M0: [abort]\n  S1: [abort, switch_replica, re_preprocess]\n  S2: [abort, switch_replica, re_preprocess]\n  S3: [abort, switch_replica]\n  S4: [abort, switch_replica]\n  M1: [abort, switch_replica]\n\n# Faults per arm, as the adapter contract defines them (src/adapters/README.md, \"Faults\").\n# Online faults run with each policy. Offline faults are detection-only: no recovery is defined after\n# a rejected preprocessing phase, so they run with abort.\nfaults:\n  online: [flip_answer_bit, wrong_record, stale_record, drop_server]\n  offline:\n    flip_hint_bit: [S0-go, S0-cpp, S1, S2]\n    bad_proof: [S1, S2]\n\n# Focus cells (spec 5.1): DB in {128 MiB, 1 GiB} x record in {32 B, 1 KiB}, every arm where it runs.\n# S3 and S4 retrieve one bit (record 0). S4 runs only up to 1 MiB (decision 10, spec v1.6), so it has\n# no focus cell. S1, S2 and S3 need more than 14 GiB at 1 GiB (notebooks/08_memory_ceiling.ipynb,\n# cell 2), so they have no 1 GiB cell on this Mac. M1 also needs more at 1 GiB with 32 B records but\n# not with 8 KiB ones; its 1 GiB x 32 B Runs stay and end oom at the cap.\n# The spec lets the humans shrink this to 1 GiB x 1 KiB if time is short.\nfocus_cells:\n  db_bytes: [134217728, 1073741824]\n  record_bytes: [32, 1024]\none_bit_arms: [S3, S4]\nmax_db_bytes:\n  S1: 134217728\n  S2: 134217728\n  S3: 134217728\n  S4: 1048576\n\n# Repetitions (spec 5.1): 100 trials per (arm, fault, policy), plus one warm-up.\ntrials: 100\nwarmup: 1\n\n# Cheating-rate sweep (spec 5.1): each query's server cheats with probability f, 1000 queries per f.\n# Under switch_replica the replicas cheat at the same rate (--replicas-cheat), so the measured cost can\n# be checked against the cost computed from the component costs (spec 6.1). A cheating server returns\n# another record's honest answer (wrong_record), a deliberate cheat rather than a transmission error.\ncheating:\n  fault: wrong_record\n  rates: [0, 0.001, 0.01, 0.1, 0.5, 1.0]\n  queries: 1000\n\nseed: 1234\n# Per adapter process. Notebook 07's feasibility run gives the costs this has to cover.\ntimeout_s: 14400\n# The spec calls a cell oom above 16 GiB, the Mac's RAM; macOS and the editor need about 2 GiB of it.\n# M1 at 128 MiB x 32 B needs 11.7 GiB (notebook 08, cell 2).\nmemory_cap_gib: 14\n",
+ "adapters": {
+  "apir-adapter": "8039a9758127e0878c85621e0f929a0d9dbb3d32c6b09eebf8f8219dce547404"
+ },
+ "sysinfo": {
+  "machine": {
+   "cpu_model": "Apple M1 Pro",
+   "arch": "arm64",
+   "physical_cpus": 8,
+   "performance_cores": 6,
+   "efficiency_cores": 2,
+   "mem_total_bytes": 17179869184
+  },
+  "os": {
+   "version": "27.2",
+   "build": "26B123",
+   "kernel": "27.2.0"
+  },
+  "power": {
+   "source": "AC Power",
+   "low_power_mode": false
+  },
+  "load": {
+   "loadavg_1m": 5.779296875,
+   "mem_available_bytes": 9802301440
+  },
+  "toolchain": {
+   "go": "go version go1.27.3 darwin/arm64",
+   "clang": "Homebrew clang version 23.1.4",
+   "openssl": "OpenSSL 3.5.9 29 Sep 2026 (Library: OpenSSL 3.5.9 29 Sep 2026)",
+   "python": "3.11.17",
+   "uv": "uv 0.13.6 (Homebrew 2026-10-26 aarch64-apple-darwin)"
+  },
+  "upstream": {
+   "apir-code": {
+    "sha": "35cabd62fb898926f5bea6035caeae39091e091d",
+    "dirty": true
+   },
+   "simplepir": {
+    "sha": "e9020b03bf2872c75b8954e749e32408b5db87ed",
+    "dirty": false
+   },
+   "verisimplepir": {
+    "sha": "3643bb7cbaae02da98a195c4d004d4d083e3ab88",
+    "dirty": true
+   }
+  },
+  "thread_env": {
+   "OMP_NUM_THREADS": null,
+   "OPENBLAS_NUM_THREADS": null,
+   "MKL_NUM_THREADS": null,
+   "NUMBA_NUM_THREADS": null,
+   "RAYON_NUM_THREADS": null
+  },
+  "captured_at": "2026-11-11T17:43:13.409728+00:00"
+ }
+}

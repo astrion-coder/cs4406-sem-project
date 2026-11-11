@@ -1,0 +1,8 @@
+{"arm": "S3", "db_bytes": 134217728, "record_bytes": 0, "kind": "trials", "fault": "wrong_record", "policy": "abort", "fault_prob": 1.0, "replicas_cheat": false, "phase": "online", "reps": 30, "warmup": 1}
+{"arm": "S3", "db_bytes": 134217728, "record_bytes": 0, "kind": "trials", "fault": "wrong_record", "policy": "switch_replica", "fault_prob": 1.0, "replicas_cheat": false, "phase": "online", "reps": 30, "warmup": 1}
+{"arm": "S3", "db_bytes": 134217728, "record_bytes": 0, "kind": "sweep", "fault": "wrong_record", "policy": "abort", "fault_prob": 0.1, "replicas_cheat": false, "phase": "online", "reps": 50, "warmup": 1}
+{"arm": "S3", "db_bytes": 134217728, "record_bytes": 0, "kind": "sweep", "fault": "wrong_record", "policy": "abort", "fault_prob": 0.5, "replicas_cheat": false, "phase": "online", "reps": 50, "warmup": 1}
+{"arm": "S3", "db_bytes": 134217728, "record_bytes": 0, "kind": "sweep", "fault": "wrong_record", "policy": "abort", "fault_prob": 1.0, "replicas_cheat": false, "phase": "online", "reps": 50, "warmup": 1}
+{"arm": "S3", "db_bytes": 134217728, "record_bytes": 0, "kind": "sweep", "fault": "wrong_record", "policy": "switch_replica", "fault_prob": 0.1, "replicas_cheat": true, "phase": "online", "reps": 50, "warmup": 1}
+{"arm": "S3", "db_bytes": 134217728, "record_bytes": 0, "kind": "sweep", "fault": "wrong_record", "policy": "switch_replica", "fault_prob": 0.5, "replicas_cheat": true, "phase": "online", "reps": 50, "warmup": 1}
+{"arm": "S3", "db_bytes": 134217728, "record_bytes": 0, "kind": "sweep", "fault": "wrong_record", "policy": "switch_replica", "fault_prob": 1.0, "replicas_cheat": true, "phase": "online", "reps": 50, "warmup": 1}
