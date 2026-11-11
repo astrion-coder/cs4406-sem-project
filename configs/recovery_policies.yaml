@@ -1,0 +1,51 @@
+# RQ4 failure and recovery (spec 5.1 and 6.1). harness/recovery.py expands this into adapter runs.
+# Decision 12: the client never retries the same server, so retry_same is disabled for every arm.
+
+# Which policies each arm runs after a rejected answer. A baseline never rejects, so it only aborts
+# (its faults end silent_wrong, which is the threat verification removes).
+policies:
+  S0-go: [abort]
+  S0-cpp: [abort]
+  M0: [abort]
+  S1: [abort, switch_replica, re_preprocess]
+  S2: [abort, switch_replica, re_preprocess]
+  S3: [abort, switch_replica]
+  S4: [abort, switch_replica]
+  M1: [abort, switch_replica]
+
+# Faults per arm, as the adapter contract defines them (src/adapters/README.md, "Faults").
+# Online faults run with each policy. Offline faults are detection-only: no recovery is defined after
+# a rejected preprocessing phase, so they run with abort.
+faults:
+  online: [flip_answer_bit, wrong_record, stale_record, drop_server]
+  offline:
+    flip_hint_bit: [S0-go, S0-cpp, S1, S2]
+    bad_proof: [S1, S2]
+
+# Focus cells (spec 5.1): DB in {128 MiB, 1 GiB} x record in {32 B, 1 KiB}, every arm where it runs.
+# S3 and S4 retrieve one bit (record 0). S4 runs only up to 1 MiB (decision 10, spec v1.6), so it has
+# no focus cell. The spec lets the humans shrink this to 1 GiB x 1 KiB if time is short.
+focus_cells:
+  db_bytes: [134217728, 1073741824]
+  record_bytes: [32, 1024]
+one_bit_arms: [S3, S4]
+max_db_bytes:
+  S4: 1048576
+
+# Repetitions (spec 5.1): 100 trials per (arm, fault, policy), plus one warm-up.
+trials: 100
+warmup: 1
+
+# Cheating-rate sweep (spec 5.1): each query's server cheats with probability f, 1000 queries per f.
+# Under switch_replica the replicas cheat at the same rate (--replicas-cheat), so the measured cost can
+# be checked against the cost computed from the component costs (spec 6.1). A cheating server returns
+# another record's honest answer (wrong_record), a deliberate cheat rather than a transmission error.
+cheating:
+  fault: wrong_record
+  rates: [0, 0.001, 0.01, 0.1, 0.5, 1.0]
+  queries: 1000
+
+seed: 1234
+# Per adapter process. Notebook 07's feasibility run gives the costs this has to cover.
+timeout_s: 14400
+memory_cap_gib: 10
