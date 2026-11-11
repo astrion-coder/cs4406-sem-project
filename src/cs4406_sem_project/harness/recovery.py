@@ -403,29 +403,45 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.dry_run:
         dry_run(runs, args.estimates)
         return 0
+    ex = prepare(runs, cfg, args.config, run_id=args.run_id, adapter_dir=args.adapter_dir,
+                 raw_dir=args.raw_dir, allow_unclean=args.allow_unclean)
+    return run_and_report(runs, ex)
+
+
+def prepare(runs: list[Run], cfg: dict, config_path: Path, *, run_id: str | None = None,
+            adapter_dir: Path = DEFAULT_ADAPTER_DIR, raw_dir: Path = DEFAULT_RAW_DIR,
+            allow_unclean: bool = False) -> Exec:
+    """Check the binaries and the machine, create <raw_dir>/<run_id>/ with its meta.json, and return
+    how to execute `runs` there."""
     binaries = {r.binary for r in runs}
-    if missing := [b for b in sorted(binaries) if not (args.adapter_dir / b).is_file()]:
-        raise SystemExit(f"missing adapter binaries in {args.adapter_dir}: {missing}")
-    if not args.allow_unclean:
+    if missing := [b for b in sorted(binaries) if not (adapter_dir / b).is_file()]:
+        raise SystemExit(f"missing adapter binaries in {adapter_dir}: {missing}")
+    if not allow_unclean:
         if hygiene.power_source() != "AC Power":
             raise SystemExit(f"plug the Mac in first ({hygiene.power_source()})")
         if hygiene.lid_closed() is not False:
             raise SystemExit("open the lid first: a closed lid sleeps the Mac despite caffeinate")
-    run_id = args.run_id or "rq4-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_dir = args.raw_dir / run_id
+    run_id = run_id or "rq4-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    out_dir = raw_dir / run_id
     env = {**os.environ, "VPIR_RUN_ID": run_id, "VPIR_GIT_SHA": _git("rev-parse", "HEAD")}
-    ex = Exec(args.adapter_dir, out_dir, cfg["seed"], cfg["timeout_s"],
-              int(cfg["memory_cap_gib"] * memcap.GIB), env, args.allow_unclean)
+    ex = Exec(adapter_dir, out_dir, cfg["seed"], cfg["timeout_s"],
+              int(cfg["memory_cap_gib"] * memcap.GIB), env, allow_unclean)
     out_dir.mkdir(parents=True, exist_ok=True)
-    write_meta(out_dir, run_id, args.config, ex, binaries)
-    print(f"run {run_id}: {len(runs)} Runs into {out_dir}" + (" (not citable)" if args.allow_unclean else ""))
+    write_meta(out_dir, run_id, config_path, ex, binaries)
+    return ex
+
+
+def run_and_report(runs: list[Run], ex: Exec) -> int:
+    """run_all, then print what is left. Returns 0 when every Run is settled."""
+    print(f"run {ex.out_dir.name}: {len(runs)} Runs into {ex.out_dir}"
+          + (" (not citable)" if ex.allow_unclean else ""), flush=True)
     t0 = time.monotonic()
-    run_all(runs, ex)
-    left = [r.name for r in runs if r.name not in settled_names(out_dir / "manifest.jsonl")]
+    run_all(runs, ex, log=lambda s: print(s, flush=True))
+    left = [r.name for r in runs if r.name not in settled_names(ex.out_dir / "manifest.jsonl")]
     print(f"{len(runs) - len(left)} of {len(runs)} Runs settled (complete, oom or timeout) "
           f"in {time.monotonic() - t0:.0f} s")
     for name in left:
-        print(f"  not settled, rerun with the same --run-id: {name}")
+        print(f"  not settled, rerun with the same run id: {name}")
     return 1 if left else 0
 
 
