@@ -8,7 +8,7 @@ Patches are build-only, per spec section 10 rule 1: x86-only flags, Darwin paths
 
 Three VeriSimplePIR fixes go beyond the rule 1 list: a missing standard include, a guard around an unused `__float128` typedef, and two `BigUnsigned` constructors. They are macOS portability fixes that do not change what the code computes, and they are marked below as needing human approval. Without them VeriSimplePIR does not build on macOS.
 
-One patch per file, so each patch can be checked for "already applied" on its own. Every patch gets one row below.
+No two patches edit the same file, so each patch can be checked for "already applied" on its own. A patch may edit several files: `apir-code/01` edits `matrix.go` and `matrix128.go`, and `verisimplepir/04` edits `BigUnsigned.cpp` and `BigUnsigned.h`. A new change to a file that a patch already edits goes into that patch. Every patch gets one row below.
 
 | Patch | What | Why | Affects performance? |
 |---|---|---|---|
