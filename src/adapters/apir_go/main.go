@@ -477,6 +477,9 @@ func injectFault(cfg config, c cell, rng *rand.Rand, index int, queries, answers
 			answers[s] = c.staleAnswer(s, q)
 		}
 	}
+	// A shadow query is as large as a real one (1.9 GB for S3 at 128 MiB). Collected here, untimed, it cannot
+	// slow the client's timed work for the rest of the repetition.
+	runtime.GC()
 }
 
 // pickBit draws uniformly over all bits in ranges.
