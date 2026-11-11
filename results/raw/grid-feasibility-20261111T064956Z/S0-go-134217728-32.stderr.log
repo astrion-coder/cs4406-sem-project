@@ -1,0 +1,3 @@
+Working with: n=1024; db size=2^26 (l=10836, m=10838); logq=32; p=833; sigma=6.400000
+Total packed DB size is ~135.830482 MB
+layout: 4194304 records, 4 pieces each, entry 64 bits, p=833, ell=10836, m=10838, record rows 387
