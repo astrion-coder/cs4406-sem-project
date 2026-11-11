@@ -7,8 +7,9 @@
 - `adapters-build` builds all three binaries into `build/adapters/` from the pinned, patched submodules, with no network access (`GOPROXY=off`).
 - `adapters-bench` runs one honest cell and writes offline and online records, with `correct: true` on every online record.
 - `adapters-fault` injects a fault into a verifiable arm, which reports `detected: true` on every faulted repetition.
+- `adapters-recovery` follows a recovery policy after each detected fault. Under `--recovery switch_replica` with honest replicas (no `--replicas-cheat`), every faulted repetition ends `recovered`, and the record carries `recovery_attempts`, `recovery_s`, `recovery_cpu_s` and the attempt's bytes. A two-server arm's `recovery_s` counts its servers in parallel, its slower answer, while `recovery_cpu_s` sums both (`src/adapters/README.md`, "Recovery").
 - `adapters-usage` rejects an invalid command line with exit 2, for example `--recovery retry_same` (decision 12).
-- `adapters-unsupported` writes `unsupported_params` records and exits 0 for a size the scheme does not support (S3 below 1 MiB).
+- `adapters-unsupported` writes `unsupported_params` records and exits 0 for a size the scheme does not support. S3 supports exactly 1 MiB, 16 MiB, 128 MiB and 1 GiB, and nothing between.
 
 ## How to get to it (user POV)
 
@@ -29,6 +30,7 @@ Preconditions:
   - `bash $S/step.sh adapters-bench-m1 build/adapters/apir-adapter --arm M1 --db-bytes 1048576 --record-bytes 32 --phase all --reps 3 --warmup 1 --seed 1234 --fault none --out "$VERIFY_RUN/m1.jsonl"`
 - **Check the records.** Run `bash $S/step.sh adapters-records uv run python -c "import json,sys; [print(f, sorted({(r['phase'], r['status']) for r in map(json.loads, open(f))}), all(r['correct'] for r in map(json.loads, open(f)) if r['phase'] == 'online')) for f in sys.argv[1:]]" "$VERIFY_RUN/s0go.jsonl" "$VERIFY_RUN/s1.jsonl" "$VERIFY_RUN/m1.jsonl"`. Each file prints `[('offline', 'ok'), ('online', 'ok')] True`, and each holds 8 lines (4 offline, 4 online).
 - **Fault.** Run `bash $S/step.sh adapters-fault build/adapters/vsp-adapter --arm S2 --db-bytes 1048576 --record-bytes 32 --phase online --reps 5 --warmup 0 --seed 1234 --fault flip_answer_bit --out "$VERIFY_RUN/s2-fault.jsonl"`. Exit 0. Then `bash $S/step.sh adapters-fault-check uv run python -c "import json,sys; rs=[json.loads(l) for l in open(sys.argv[1])]; print(len(rs), all(r['faulted'] and r['detected'] is True for r in rs))" "$VERIFY_RUN/s2-fault.jsonl"` prints `5 True`.
+- **Recovery.** Run `bash $S/step.sh adapters-recovery build/adapters/apir-adapter --arm M1 --db-bytes 1048576 --record-bytes 32 --phase online --reps 3 --warmup 0 --seed 1234 --fault flip_answer_bit --recovery switch_replica --out "$VERIFY_RUN/m1-recovery.jsonl"`. Exit 0. Then `bash $S/step.sh adapters-recovery-check uv run python -c "import json,sys; rs=[json.loads(l) for l in open(sys.argv[1])]; print(len(rs), all(r['faulted'] and r['detected'] is True and r['correct'] is False for r in rs), sorted({r['recovery_outcome'] for r in rs}), all(r['recovery_attempts'] == 1 and r['metrics']['recovery_s'] < 0.75 * r['metrics']['recovery_cpu_s'] for r in rs))" "$VERIFY_RUN/m1-recovery.jsonl"` prints `3 True ['recovered'] True`. The last check fails if `recovery_s` sums M1's two servers again: on 12 November it was 0.51 to 0.52 of `recovery_cpu_s`.
 - **Usage error.** Run `bash $S/step.sh --expect 2 adapters-usage build/adapters/apir-adapter --arm M1 --db-bytes 1048576 --record-bytes 32 --phase online --reps 1 --warmup 0 --seed 1234 --fault flip_answer_bit --recovery retry_same --out "$VERIFY_RUN/usage.jsonl"`. Exit 2, and the log names `retry_same`.
 - **Unsupported.** Run `bash $S/step.sh adapters-unsupported build/adapters/apir-adapter --arm S3 --db-bytes 65536 --record-bytes 0 --phase online --reps 2 --warmup 0 --seed 1234 --fault none --out "$VERIFY_RUN/s3-unsupported.jsonl"`. Exit 0. `$VERIFY_RUN/s3-unsupported.jsonl` holds one line, because an unsupported cell writes one record per phase, not per repetition. It has `"status": "unsupported_params"` and an `error` naming the sizes LWE+ supports.
 
@@ -36,6 +38,7 @@ Preconditions:
 
 - Keep cells small. S4 takes about 6 minutes to build its digest and 18 s per query at 1 MiB (`notebooks/06_s4_cost.ipynb`), so drive S4 at 64 KiB. S3 and S4 retrieve one bit and need `--record-bytes 0`.
 - `--out` appends. Reusing a path mixes runs, so give every step its own file under `$VERIFY_RUN`.
+- `correct` and `detected` describe the first answer, so a recovered repetition has `correct: false`. The final answer's fate is in `recovery_outcome`, where `recovered` always means the accepted record was right.
 - A faulted M1 answer can make upstream allocate tens of GiB. The adapter refuses those decodes and logs "reconstruction not called". That line in stderr is expected, not a failure.
 - `vsp-adapter` finds `libverisimplepir.dylib` through an rpath relative to the binary. A copy outside `build/<dir>/` fails to load the library.
 - The records carry wall and CPU times. They are not benchmark numbers: CLAUDE.md requires every number in README.md to come from a notebook cell.

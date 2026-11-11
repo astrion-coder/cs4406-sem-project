@@ -12,7 +12,7 @@
 ## How to get to it (user POV)
 
 - `make build`.
-- `notebooks/01_g0_upstream_tests.ipynb` cell 1.
+- `notebooks/01_g0_upstream_tests.ipynb` cell 1, which runs `make patch` and `make build` and then `make test` (about 3 more minutes).
 
 ## Driving it with step.sh
 

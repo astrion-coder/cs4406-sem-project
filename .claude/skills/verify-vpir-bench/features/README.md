@@ -7,7 +7,7 @@ This directory is the maintained source for verifying the benchmark's command-li
 - Work from the repo root of a checkout where `make setup` has run.
 - `bash .claude/skills/verify-vpir-bench/scripts/doctor.sh` exits 0.
 - `export VERIFY_RUN=logs/verify/$(date -u +%Y%m%dT%H%M%SZ)` and `S=.claude/skills/verify-vpir-bench/scripts` are set in the shell that drives.
-- No other verification run, `make test`, `make conformance`, `make recovery`, adapter test, or notebook run is active on this checkout. `doctor.sh` checks this.
+- No other verification run, `make test`, `make conformance`, `make recovery`, adapter test, notebook run, RQ4 driver run or adapter process is active on this checkout. `doctor.sh` checks this.
 
 ## Driving conventions
 
@@ -43,7 +43,8 @@ Each feature file starts with an H1 title and one paragraph describing the behav
 - [Build and run the measurement adapters](./adapters.md) covers `make adapters` and one bench-mode cell per adapter, with faults, usage errors and unsupported parameters.
 - [Run the adapter test suites](./suites.md) covers `make conformance` (G1), `make recovery` (P7) and the memory cap on adapter runs.
 - [Serve and client mode](./serve.md) covers server sessions on one and two servers, clean shutdown, and the serve judge (G6).
-- [Re-run the notebooks behind README claims](./notebooks.md) covers notebooks 02 to 06, their raw records, and notebook 06's timing checks.
+- [Run the RQ4 recovery experiment](./rq4-driver.md) covers `harness/recovery.py`: planning, a citable run, resume, and its refusals.
+- [Re-run the notebooks behind README claims](./notebooks.md) covers notebooks 02 to 13, their raw records, the timing checks, and which notebooks must not be re-executed.
 
 ## Not mapped yet
 

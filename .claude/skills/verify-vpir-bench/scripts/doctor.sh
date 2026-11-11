@@ -44,5 +44,8 @@ check "no other test run is running" sh -c '! pgrep -f "cs4406_sem_project[.]har
 check "no conformance or recovery run is running" sh -c '! pgrep -f "cs4406_sem_project[.]harness[.]conformance"'
 check "no adapter test is running" sh -c '! pgrep -f "tests/test_(adapters|recovery|serve)[.]py"'
 check "no notebook is running" sh -c '! pgrep -f "nbconvert[ ].*--execute"'
+check "no RQ4 driver run is running" sh -c '! pgrep -f "cs4406_sem_project[.]harness[.]recovery"'
+# Catches adapters started from a Jupyter kernel or by hand, which the checks above miss.
+check "no adapter process is running" sh -c '! pgrep -f "build/[a-z]+/[a-z]+-adapte[r]"'
 
 exit $fail

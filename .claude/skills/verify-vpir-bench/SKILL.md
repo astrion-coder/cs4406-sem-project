@@ -1,6 +1,6 @@
 ---
 name: verify-vpir-bench
-description: Drive and prove the verifiable-PIR benchmark's command-line pipeline on this Mac (make patch, build, test, sysinfo, adapters, conformance, recovery; the adapters' bench, serve and client modes; the notebooks behind README claims), recording exit codes, logs and before/after repo state as evidence. Use before claiming that a change to the Makefile, patches/, the upstream test runner, sysinfo, an adapter, the adapter test suites or serve mode works, and to re-check gates G0, G1 and G6.
+description: Drive and prove the verifiable-PIR benchmark's command-line pipeline on this Mac (make patch, build, test, sysinfo, adapters, conformance, recovery; the adapters' bench, serve and client modes; the RQ4 recovery driver; the notebooks behind README claims), recording exit codes, logs and before/after repo state as evidence. Use before claiming that a change to the Makefile, patches/, the upstream test runner, sysinfo, an adapter, the adapter test suites, serve mode or the RQ4 driver works, and to re-check gates G0, G1 and G6.
 ---
 
 # Verify the vpir benchmark
@@ -8,7 +8,7 @@ description: Drive and prove the verifiable-PIR benchmark's command-line pipelin
 The project is a command-line build-and-measure pipeline. People drive it through `make` targets at the repo root, the adapter binaries and the notebooks. It runs natively on an Apple M1 Pro (darwin/arm64). Only serve mode listens on a port, always `127.0.0.1:0`, and only for the life of one step.
 
 - **Primary entry.** `make setup | patch | build | test | sysinfo | adapters | conformance | recovery` from the repo root.
-- **Secondary entries.** The adapter binaries in `build/adapters/` (bench, `--mode serve` and `--mode client`), `uv run pytest tests/test_*.py`, `uv run python -m cs4406_sem_project.harness.upstream_tests` and `...harness.conformance`, `uv run python docs/tools/md2pdf.py`, and the notebooks in `notebooks/`.
+- **Secondary entries.** The adapter binaries in `build/adapters/` (bench, `--mode serve` and `--mode client`), `uv run pytest tests/test_*.py`, `uv run python -m cs4406_sem_project.harness.upstream_tests`, `...harness.conformance` and `...harness.recovery` (the RQ4 driver), `uv run python docs/tools/md2pdf.py`, and the notebooks in `notebooks/`.
 - **Not built yet.** The grid runner (SG's phase P2), the load generator and the analysis. Add a feature file for each when it lands.
 
 The recipes live in `features/`. Read `features/README.md` before driving anything.
@@ -43,7 +43,7 @@ Read-only. It prints one `ok` or `FAIL` line per check and exits non-zero on any
 - Every `patches/<submodule>/*.patch` is applied.
 - VeriSimplePIR's `pir_test` exists and `libverisimplepir.dylib` is arm64.
 - `build/adapters/` holds the three adapter binaries.
-- No other `upstream_tests`, conformance or recovery run, adapter test, or notebook run is running.
+- No other `upstream_tests`, conformance or recovery run, adapter test, notebook run, RQ4 driver run or adapter process is running.
 
 Run it first, and again whenever a step surprises you. Do not drive while it reports another run. Two runs share the submodule working trees and build outputs (`make conformance` and `make recovery` rebuild `build/adapters/`), `make test` names its log directory to the second, and timing runs need the Mac to themselves, so concurrent runs corrupt each other. There is no way to isolate them on one checkout.
 
