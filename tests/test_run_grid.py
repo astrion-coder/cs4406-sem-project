@@ -68,6 +68,14 @@ def test_parse_size_rejects(bad):
         gridmod.parse_size(bad)
 
 
+def test_one_bit_section_takes_s0go_but_not_s1():
+    g = gridmod.load()
+    assert {c.arm for c in gridmod.expand(g, "anchors")} == {"S0-go", "S3", "S4"}
+    g["tiers"]["anchors"]["one_bit"]["S1"] = ["1MiB"]
+    with pytest.raises(ValueError, match="cannot retrieve one bit"):
+        gridmod.expand(g, "anchors")
+
+
 def test_one_bit_arm_in_sweep_is_rejected():
     g = gridmod.load()
     g["tiers"]["smoke"]["sweep"]["arms"].append("S3")

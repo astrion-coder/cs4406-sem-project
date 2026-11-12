@@ -8,7 +8,7 @@
 #   R13, R14  headline ranges over 4 GiB and up, against 32-bit SimplePIR; R15 and R16 keep the compute part.
 #   R18-R21   communication at 4 to 256 GiB, recomputed with params.cpp (decision 7), not from the grid.
 #   R22       the source sentence is garbled (TODO[HUMAN] in docs/reproduction_targets.md).
-#   R23-R28   the SimplePIR 2^33 x 1-bit anchor is in grid.yaml anchors_pending, not yet runnable.
+#   R26-R28   DoublePIR is optional (Tier 3); R23-R25, the SimplePIR one-bit anchor, are below.
 #
 # Fields
 #   check: ratio      measured median(num)/median(den) per listed db size, against value or range
@@ -180,6 +180,40 @@ targets:
   - {id: R11-S0-1GiB, ref: R11, where: "Fig 6, p.3846", claim: "S0-go online bytes at 1 GiB",
      published: "SimplePIR about 235", check: abs, rule: exact, precision: plot,
      num: {arm: S0-go, record: 256B}, metric: online_bytes, db: [1GiB], value: 235, unit: KiB}
+  # Fig 6 at 1 KiB, from the anchors tier (decision 21). SimplePIR's 1 KiB bar uses 2048-bit records,
+  # which a 1 KiB database holds four of, so S0-go has no 1 KiB anchor.
+  - {id: R9-S4-1KiB, ref: R9, where: "Fig 6, p.3846", claim: "S4 (DDH) user time at 1 KiB",
+     published: "1 KiB: DDH about 130", check: abs, rule: hw, precision: plot,
+     num: {arm: S4, record: null}, metric: user_time_s, db: [1KiB], value: 130, unit: ms}
+  - {id: R9-S3-1KiB, ref: R9, where: "Fig 6, p.3846", claim: "S3 (LWE+) user time at 1 KiB",
+     published: "LWE+ about 18", check: abs, rule: hw, precision: plot,
+     num: {arm: S3, record: null}, metric: user_time_s, db: [1KiB], value: 18, unit: ms}
+  - {id: R10-S4-1KiB, ref: R10, where: "Fig 6, p.3846", claim: "S4 digest download at 1 KiB",
+     published: "1 KiB: DDH about 3", check: abs, rule: exact, precision: plot,
+     num: {arm: S4, record: null}, metric: offline_down_bytes_hint_only, db: [1KiB], value: 3, unit: KiB}
+  - {id: R10-S3-1KiB, ref: R10, where: "Fig 6, p.3846", claim: "S3 digest download at 1 KiB",
+     published: "LWE+ about 390", check: abs, rule: exact, precision: plot,
+     num: {arm: S3, record: null}, metric: offline_down_bytes_hint_only, db: [1KiB], value: 390, unit: KiB}
+  - {id: R11-S4-1KiB, ref: R11, where: "Fig 6, p.3846", claim: "S4 online bytes at 1 KiB",
+     published: "1 KiB: DDH about 5.8", check: abs, rule: exact, precision: plot,
+     num: {arm: S4, record: null}, metric: online_bytes, db: [1KiB], value: 5.8, unit: KiB}
+  - {id: R11-S3-1KiB, ref: R11, where: "Fig 6, p.3846", claim: "S3 online bytes at 1 KiB",
+     published: "LWE+ about 5", check: abs, rule: exact, precision: plot,
+     num: {arm: S3, record: null}, metric: online_bytes, db: [1KiB], value: 5, unit: KiB}
+
+  # SimplePIR README at the pinned SHA (spec 3), the one-bit anchor: 1 GiB as 2^33 one-bit entries
+  # (decision 21). The README's MB and KB are binary: the hint is ell x n x 4 B and the online bytes
+  # (m + ell) x 4 B, and only MiB and KiB put them near 121 and 242. The 5 % text tolerance gives the
+  # same verdict under either reading.
+  - {id: R23, ref: R23, where: "SimplePIR README, Benchmarks", claim: "S0-go hint, 2^33 one-bit entries",
+     published: "121 MB of offline download", check: abs, rule: exact, precision: text,
+     num: {arm: S0-go, record: null}, metric: offline_down_bytes_hint_only, db: [1GiB], value: 121, unit: MiB}
+  - {id: R24, ref: R24, where: "SimplePIR README, Benchmarks", claim: "S0-go online bytes, 2^33 one-bit entries",
+     published: "242 KB of online communication", check: abs, rule: exact, precision: text,
+     num: {arm: S0-go, record: null}, metric: online_bytes, db: [1GiB], value: 242, unit: KiB}
+  - {id: R25, ref: R25, where: "SimplePIR README, Benchmarks", claim: "S0-go server throughput, one core",
+     published: "a throughput of roughly 10 GB/s/core", check: abs, rule: hw, precision: text,
+     num: {arm: S0-go, record: null}, metric: throughput_GBps, db: [1GiB], value: 10, unit: GB/s}
   - id: R12
     ref: R12
     where: "§7.3, p.3847"

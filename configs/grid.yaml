@@ -8,7 +8,7 @@ warmup: 1  # spec 5: one warm-up per cell, recorded with is_warmup=true
 # Harness caps per (cell, phase). These are not measurements: they bound a run and the dry-run's
 # upper time estimate. A cell that hits one is recorded as timeout or oom (spec 9), never shrunk.
 timeout_s:
-  default: {"1MiB": 900, "16MiB": 1800, "128MiB": 3600, "1GiB": 7200}
+  default: {"1KiB": 900, "1MiB": 900, "16MiB": 1800, "128MiB": 3600, "1GiB": 7200}
   S4: 2700  # decision 10: 45 minutes per S4 cell
 mem_cap_gib: 14  # the reference Mac has 16 GiB; memcap.py kills a run whose footprint passes this
 
@@ -61,9 +61,10 @@ tiers:
       S3: ["128MiB", "1GiB"]
       S4: []  # S4 does not run at the focus sizes (decision 10)
 
-# RQ1 paper-native configurations (spec 5). Listed for review, not yet runnable: each needs a
-# record shape the spec 9 command line cannot express, or a tECC value decision 9 does not give.
-# TODO[HUMAN] IC: decide how the adapters take these, then move them into a tier.
-anchors_pending:
-  - {arm: S0-go, db: "1GiB", entry_bits: 1, why: "SimplePIR README, 2^33 x 1-bit entries; --record-bytes has no 1-bit form"}
-  - {arm: S3, db: "1KiB", why: "Colombo Fig 6 starts at 1 KiB; decision 9 gives tECC only from 1 MiB"}
+  anchors:  # RQ1 paper-native configurations the other tiers lack (spec 5, decision 21)
+    reps: *reps_full
+    one_bit:
+      S0-go: ["1GiB"]  # SimplePIR README: 2^33 one-bit entries (--record-bytes 0)
+      S3: ["1KiB"]  # Colombo et al. Fig 6, tECC = 3
+      S4: ["1KiB"]
+

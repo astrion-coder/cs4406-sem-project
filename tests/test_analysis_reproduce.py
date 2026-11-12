@@ -73,8 +73,9 @@ def test_missing_cells_are_reported_not_dropped():
     assert list(t3.verdict) == ["missing", "missing"]
 
 
-def test_every_target_has_a_row_on_the_synthetic_tier1_grid():
-    df = frame.rows_to_frame(synthetic.rows_for_cells(grid.expand(grid.load(), "tier1")))
+def test_every_target_has_a_row_on_the_synthetic_tier1_and_anchor_grids():
+    g = grid.load()
+    df = frame.rows_to_frame(synthetic.rows_for_cells(grid.expand(g, "tier1") + grid.expand(g, "anchors")))
     t3 = reproduce.compare(df, list(TARGETS.values()))
     assert set(t3.id) == set(TARGETS)
     assert "missing" not in set(t3.verdict)

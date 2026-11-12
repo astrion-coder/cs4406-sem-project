@@ -73,9 +73,9 @@ The headline percentages (R13 to R16) are against the 32-bit SimplePIR baseline:
 
 ## SimplePIR README (Henzinger et al., USENIX Security 2023)
 
-Cited as "SimplePIR README via spec §3". The `third_party/simplepir` submodule is not checked out on this machine (the directory is empty and `git submodule status` shows it uninitialised), so the README itself was not read for this file. These values are copied from spec §3 and must be checked against the README at the pinned SHA `e9020b03bf2872c75b8954e749e32408b5db87ed`. TODO[HUMAN]: check against the README.
+Checked on 12 November against `README.md` at the pinned SHA `e9020b03bf2872c75b8954e749e32408b5db87ed` (line 82): "On a database 1 GB in size containing $2^{33}$ 1-bit entries, SimplePIR has a throughput of roughly 10 GB/s/core, 121 MB of offline download, and 242 KB of online communication, when running on an AWS EC2 c5n.metal instance". The DoublePIR line (87) gives "roughly 7.4 GB/s/core, 16 MB of offline download, and 345 KB of online communication". The README's MB and KB are binary units: the hint is `ell × n × 4` bytes and the online bytes `(m + ell) × 4`, and only MiB and KiB put them near 121 and 242. The S0-go anchor runs this setup through `--record-bytes 0` (decision 21).
 
-| ID | Claim | Value (spec §3) | DB setup | Arms | Kind / rule |
+| ID | Claim | Value (README) | DB setup | Arms | Kind / rule |
 |---|---|---|---|---|---|
 | R23 | SimplePIR hint size | ~121 MB | 1 GB, 2^33 entries of 1 bit | S0-go anchor (spec §5) | abs, `exact` |
 | R24 | SimplePIR online communication | ~242 KB | as R23 | S0-go anchor | abs, `exact` |
@@ -105,7 +105,7 @@ R23 and R24 are consistent in size with the SimplePIR bars of [CNCG+23] Fig 6 at
 | VLHE PIR against APIR and APIR+: APIR+ runtime "roughly 5×" and APIR "about 25×" that of VLHE PIR; "near 40% reduction" in online communication against APIR; "7-12×" smaller against APIR+; APIR+ offline "about 4.5× smaller"; "roughly 7×" at 1024-bit entries | [dCL24] §6.1, p.5942 | VLHE PIR (non-preprocessed) is not an arm, and Fig 9 (p.5944) uses 4 to 256 GiB databases. |
 | Spiral "around 25× slower online computation" than VeriSimplePIR; DoublePIR worse in both | [dCL24] §7, p.5943 | Spiral is not an arm; the setting is the 8 GB password application. |
 | Multi-machine timings over 10 GbE | [CNCG+23] p.3845 | Single M1 Pro (decision 1). Our M0/M1 user time has no real network; network is modelled (spec §5). |
-| SimplePIR and DoublePIR throughput on AWS c5n.metal (R25, R28) | SimplePIR README via spec §3 | Different hardware; kept only as a `hw` sanity check. |
+| SimplePIR and DoublePIR throughput on AWS c5n.metal (R25, R28) | SimplePIR README, line 82 and 87 | Different hardware; kept only as a `hw` sanity check. |
 
 ## Discrepancies found while checking plan.md and spec §3 against the PDFs
 

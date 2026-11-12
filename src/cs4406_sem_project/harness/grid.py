@@ -17,6 +17,8 @@ GRID_PATH = ROOT / "configs" / "grid.yaml"
 
 ARMS = ("S0-go", "S0-cpp", "S1", "S2", "S3", "S4", "M0", "M1")
 ONE_BIT_ARMS = frozenset({"S3", "S4"})
+# S0-go also retrieves one bit, but only as the SimplePIR README anchor (decision 21).
+ONE_BIT_CAPABLE = ONE_BIT_ARMS | {"S0-go"}
 PHASES = ("offline", "online")
 UNITS = {"B": 1, "KiB": 1 << 10, "MiB": 1 << 20, "GiB": 1 << 30}
 _SIZE = re.compile(r"^\s*(\d+)\s*(B|KiB|MiB|GiB)\s*$")
@@ -141,8 +143,8 @@ def expand(grid: dict, tier: str) -> list[Cell]:
                     raise ValueError(f"record {fmt_size(rec)} larger than database {fmt_size(db)}")
                 cells += [cell(arm, db, rec, ph) for ph in PHASES]
     for arm, sizes in (t.get("one_bit") or {}).items():
-        if arm not in ONE_BIT_ARMS:
-            raise ValueError(f"{arm} is not a one-bit arm")
+        if arm not in ONE_BIT_CAPABLE:
+            raise ValueError(f"{arm} cannot retrieve one bit")
         for db in map(parse_size, sizes or []):
             cells += [cell(arm, db, None, ph) for ph in PHASES]
     for c in cells:

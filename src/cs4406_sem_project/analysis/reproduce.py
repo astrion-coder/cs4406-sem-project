@@ -18,7 +18,7 @@ from cs4406_sem_project.harness.grid import fmt_size, parse_size
 ROOT = Path(__file__).resolve().parents[3]
 TARGETS_PATH = ROOT / "configs" / "reproduction_targets.yaml"
 
-UNITS = {"x": 1.0, "s": 1.0, "ms": 1e-3, "KiB": 1024.0, "MiB": float(1 << 20)}
+UNITS = {"x": 1.0, "s": 1.0, "ms": 1e-3, "KiB": 1024.0, "MiB": float(1 << 20), "GB/s": 1.0}
 TOLERANCE = {"text": 1.05, "plot": 1.2}  # spec H1 (+-5 %); docs/reproduction_targets.md (log-axis plot reading)
 CHECKS = ("ratio", "max_ratio", "trend_up", "less", "abs")
 ONLINE = set(aggregate.METRICS["online"])
