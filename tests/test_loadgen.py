@@ -53,13 +53,20 @@ def test_targets_are_the_focus_cells():
     assert {t.servers for t in ts if t.arm in ("M0", "M1")} == {2}
 
 
+def test_load_yaml_runs_rq6_and_rq7_at_the_rq4_cell_only():
+    load = loadgen.yaml.safe_load(loadgen.LOAD_PATH.read_text())
+    ts = loadgen.only_cells(loadgen.targets(gridmod.load(), "focus"), load["cells"])
+    assert {t.cell_id for t in ts} == {f"{a}_128MiB_1KiB" for a in ("S0-go", "S0-cpp", "S1", "S2", "M0", "M1")} | {
+        "S3_128MiB_1bit"}
+
+
 def test_points_follow_load_yaml():
     load = loadgen.yaml.safe_load(loadgen.LOAD_PATH.read_text())
     assert [p.clients for p in loadgen.closed_points(load)] == [1, 2, 4, 8, 16, 32, 64]
     assert {p.workers for p in loadgen.closed_points(load)} == {6}
     assert [p.name for p in loadgen.open_points(load)][:2] == ["open_w6_f0.10", "open_w6_f0.25"]
     assert [(p.workers, p.clients, p.runs) for p in loadgen.multicore_points(load)] == [
-        (1, 16, 30), (2, 16, 30), (4, 16, 30), (6, 16, 30)]
+        (1, 16, 3), (2, 16, 3), (4, 16, 3), (6, 16, 3)]  # decision 25
     assert Point("multicore", 2, 30, clients=16).loop == "closed"
 
 

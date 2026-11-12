@@ -107,6 +107,15 @@ def targets(grid: dict, tier: str) -> list[Target]:
     return list(seen.values())
 
 
+def only_cells(ts: list[Target], cells: dict | None) -> list[Target]:
+    """Keep the targets whose database and record sizes load.yaml's `cells` lists ("1bit" for one-bit arms)."""
+    if not cells:
+        return ts
+    dbs = {gridmod.parse_size(s) for s in cells["db_bytes"]}
+    recs = {None if s == "1bit" else gridmod.parse_size(s) for s in cells["record_bytes"]}
+    return [t for t in ts if t.db_bytes in dbs and t.record_bytes in recs]
+
+
 def closed_points(load: dict) -> list[Point]:
     cl = load["closed_loop"]
     return [Point("closed", cl["workers"], load["runs"], clients=c) for c in cl["clients"]]
@@ -468,7 +477,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"--experiments takes {','.join(EXPERIMENTS)}", file=sys.stderr)
         return run_grid.EXIT_USAGE
     grid = gridmod.load(args.grid)
-    ts = targets(grid, args.tier)
+    ts = only_cells(targets(grid, args.tier), load.get("cells"))
     if args.arms:
         ts = [t for t in ts if t.arm in args.arms.split(",")]
     if args.dry_run:
