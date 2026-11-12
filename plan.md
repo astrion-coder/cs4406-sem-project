@@ -44,6 +44,7 @@ This plan divides the remaining work between the two of us. The build contract i
 | 22 | LAN profile in RQ3b | `dnctl` rounds a delay up to the kernel tick, which is 10 ms on the M1 Pro (`sysctl kern.clockrate` reports hz = 100), so LAN's 0.5 ms RTT cannot be emulated. LAN runs at 1 Gbps with no added delay. Gate G4 checks its bandwidth (±10 %) and records its measured RTT instead of checking it, and F9 compares emulated LAN against the model at that measured RTT. The modelled LAN in F5 keeps 0.5 ms. Broadband and mobile delays are whole ticks. Decided 12 November. |
 | 23 | Smoke shape | Spec §11's smoke runs the six record-size arms at 1 MiB × 1 KiB, S3 at 1 MiB and S4 at 64 KiB, 3 repetitions each, as `configs/grid.yaml` does. At 1 MiB, S4's offline phase alone is four digests of about 6 minutes each (`notebooks/06_s4_cost.ipynb`). Decided 12 November. |
 | 24 | Prices | `configs/prices.yaml` stays null, so the optional "$ per 1k queries" (spec §6) is not reported. Decided 12 November. |
+| 25 | RQ6 and RQ7 size | Both run at 128 MiB × 1 KiB only, the RQ4 cell, with 3 load-generator runs per point, RQ7's worker counts included. Spec §5.1's own shrink, 1 GiB × 1 KiB, would leave no single-server verifiable arm, because S1, S2 and S3 exceed the 14 GiB cap at 1 GiB (`notebooks/08_memory_ceiling.ipynb`). At 128 MiB every arm with a focus size fits. `configs/load.yaml` had read RQ7's 30 repetitions as 30 load runs per worker count, 63 h with RQ6 at all focus cells (`notebooks/16_tier1_plan.ipynb`). Decided 12 November. |
 
 ## How we split the work
 
