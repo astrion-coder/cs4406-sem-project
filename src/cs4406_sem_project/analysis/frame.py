@@ -117,13 +117,24 @@ def load_session(session_dir: Path, reference_platform: str) -> pd.DataFrame | N
     return table
 
 
+def _link_state(profile_dir: Path) -> dict:
+    """The link state netem.py last recorded for this profile (link.json), or {} for the loopback baseline."""
+    path = profile_dir / "link.json"
+    history = json.loads(path.read_text()) if path.exists() else []
+    return (history[-1].get("state") or {}) if history else {}
+
+
 def load_netem(netem_dir: Path, reference_platform: str) -> pd.DataFrame:
-    """netem.py's client rows, one subdirectory per profile; the profile is in the path, not the rows."""
+    """netem.py's client rows, one subdirectory per profile; the profile is in the path, not the rows.
+    Each row also carries its link's rtt_checked and calibrated RTT (decision 22: LAN's is recorded only)."""
     parts = []
     for d in sorted(p for p in netem_dir.iterdir() if p.is_dir()):
         df, _status = load_runs([d], reference_platform)
         if not df.empty:
-            parts.append(df.assign(profile=d.name))
+            state = _link_state(d)
+            calib = state.get("calib_rtt_ms")
+            parts.append(df.assign(profile=d.name, rtt_checked=state.get("rtt_checked", "yes") != "no",
+                                   calib_rtt_ms=float(calib) if calib else np.nan))
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 

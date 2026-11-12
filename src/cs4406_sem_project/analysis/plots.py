@@ -164,6 +164,17 @@ def emulation(client: pd.DataFrame, latency: pd.DataFrame) -> pd.DataFrame:
                         "n": g.size(), "online_bytes": g.online_bytes.median()}).reset_index()
     modelled = latency.rename(columns={"p50": "modelled_p50", "p95": "modelled_p95"})
     out = out.merge(modelled[[*keys, "modelled_p50", "modelled_p95"]], on=keys, how="left")
+    profiles = amortise.load_profiles()
+    out["modelled_rtt_ms"] = out.profile.map({p: v.rtt_ms for p, v in profiles.items()})
+    if "rtt_checked" in client:
+        # Decision 22: a link whose RTT dnctl could not set (LAN) is modelled at its calibrated RTT. RTT is one
+        # additive term of latency_e2e, so the model moves by the difference times the round count.
+        links = client.groupby("profile")[["rtt_checked", "calib_rtt_ms"]].first()
+        measured = links[~links.rtt_checked & links.calib_rtt_ms.notna()].calib_rtt_ms
+        new_rtt = out.profile.map(measured)
+        shift = ((new_rtt - out.modelled_rtt_ms) / 1e3 * amortise.ROUNDS).fillna(0.0)
+        out[["modelled_p50", "modelled_p95"]] = out[["modelled_p50", "modelled_p95"]].add(shift, axis=0)
+        out["modelled_rtt_ms"] = new_rtt.fillna(out.modelled_rtt_ms)
     out["emulated_over_modelled"] = out.emulated_p50 / out.modelled_p50
     return out
 

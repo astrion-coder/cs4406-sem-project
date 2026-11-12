@@ -180,8 +180,8 @@ cmd_up() {
     state_set "profile=$profile" "down_mbps=$DOWN_MBPS" "up_mbps=$UP_MBPS" "rtt_ms=$RTT_MS" \
         "delay_ms=$DELAY_MS" "ports=$ports" "up_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         "calibrated=none" "calib_rtt_ms=" "calib_down_mbps=" "calib_up_mbps=" "calibrated_at="
-    [[ $DELAY_EXACT == yes ]] || note "warning: half of rtt_ms=$RTT_MS is not whole milliseconds;" \
-        "dnctl delay is $DELAY_MS ms per direction, so calibration will likely fail for $profile"
+    [[ $DELAY_EXACT == yes ]] || note "half of rtt_ms=$RTT_MS is not whole milliseconds, so dnctl adds" \
+        "$DELAY_MS ms per direction; calibrate checks $profile's bandwidth and records its RTT (decision 22)"
     echo "up: $profile on ports $ports (pipes $PIPE_DOWN down, $PIPE_UP up)"
 }
 
@@ -276,15 +276,19 @@ cmd_calibrate() {
 
     printf '%-10s %12s %12s %s\n' metric target measured "within ${TOLERANCE_PCT}%"
     local name target measured ok
+    # Decision 22: a delay dnctl cannot set (LAN's 0.25 ms each way) leaves the RTT recorded, not checked.
+    local rtt_checked=yes
+    [[ $DELAY_EXACT == yes ]] || rtt_checked=no
     while read -r name target measured; do
-        if within "$measured" "$target"; then ok=yes; else ok=no; verdict=fail; fi
+        if [[ $name == rtt_ms && $rtt_checked == no ]]; then ok="recorded only (decision 22)"
+        elif within "$measured" "$target"; then ok=yes; else ok=no; verdict=fail; fi
         printf '%-10s %12s %12s %s\n' "$name" "$target" "$measured" "$ok"
     done <<EOF
 rtt_ms $RTT_MS $rtt
 down_mbps $DOWN_MBPS $down
 up_mbps $UP_MBPS $up
 EOF
-    state_set "calibrated=$verdict" "calib_rtt_ms=$rtt" "calib_down_mbps=$down" "calib_up_mbps=$up" \
+    state_set "calibrated=$verdict" "rtt_checked=$rtt_checked" "calib_rtt_ms=$rtt" "calib_down_mbps=$down" "calib_up_mbps=$up" \
         "calibrated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "calibration $verdict for $profile (test_netem_calibration)"
     [[ $verdict == pass ]]

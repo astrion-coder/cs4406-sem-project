@@ -1,5 +1,6 @@
 import json
 
+import pandas as pd
 import pytest
 
 from cs4406_sem_project.analysis import amortise, frame, synthetic
@@ -90,6 +91,17 @@ def test_load_netem_takes_the_profile_from_the_path(tmp_path):
     assert (df["mode"] == "client").all() and df.rtt_s_max.notna().all()
     with pytest.raises(frame.RefusedRows, match="reference platform"):
         frame.load_netem(tmp_path / "netem", "arm64-darwin-Apple M1 Pro")
+
+
+def test_load_netem_carries_the_links_rtt_check(tmp_path):
+    cell = next(c for c in FOCUS if c.arm == "S1" and c.phase == "online")
+    for name, state in (("lan", {"rtt_checked": "no", "calib_rtt_ms": "0.31"}), ("mobile", None)):
+        _write(tmp_path / "netem" / name, {cell.cell_id: synthetic.client_rows_for(cell, amortise.load_profiles()[name])})
+        if state:
+            (tmp_path / "netem" / name / "link.json").write_text(json.dumps([{"profile": name, "state": state}]))
+    df = frame.load_netem(tmp_path / "netem", synthetic.PLATFORM).groupby("profile").first()
+    assert not df.loc["lan", "rtt_checked"] and df.loc["lan", "calib_rtt_ms"] == 0.31
+    assert df.loc["mobile", "rtt_checked"] and pd.isna(df.loc["mobile", "calib_rtt_ms"])
 
 
 def test_load_session_reads_the_comparison_and_checks_the_rows(tmp_path):

@@ -147,6 +147,20 @@ def test_session_and_netem_inputs_render_f8_and_f9_unmarked(tmp_path):
     assert set(em.profile) == {"broadband"} and set(em.arm) == {"S0-cpp", "S1", "M0", "M1"}
 
 
+def test_f9_models_an_unchecked_rtt_at_its_calibrated_value():
+    """Decision 22: LAN's RTT is recorded, not emulated, so its model uses the calibrated RTT."""
+    cell = {"arm": "S1", "db_bytes": 1 << 30, "record_bytes": 1 << 10}
+    client = pd.DataFrame([{**cell, "profile": p, "query_gen_s": 0.001, "rtt_s_max": 0.002, "client_recover_s": 0.001,
+                            "client_verify_s": 0.0, "online_bytes": 100.0, "rtt_checked": checked, "calib_rtt_ms": rtt}
+                           for p, checked, rtt in (("lan", False, 0.3), ("broadband", True, 20.4)) for _ in range(5)])
+    latency = pd.DataFrame([{**cell, "profile": p, "p50": 0.05, "p95": 0.06} for p in ("lan", "broadband")])
+    em = plots.emulation(client, latency).set_index("profile")
+    assert em.loc["lan", "modelled_p50"] == pytest.approx(0.05 + (0.3 - 0.5) / 1e3)
+    assert em.loc["lan", "modelled_rtt_ms"] == pytest.approx(0.3)
+    assert em.loc["broadband", "modelled_p50"] == pytest.approx(0.05)
+    assert em.loc["broadband", "modelled_rtt_ms"] == pytest.approx(20)
+
+
 def test_missing_inputs_skip_f8_and_f9_with_a_note(tmp_path, capsys):
     _write_run(tmp_path / "run", grid.expand(grid.load(), "smoke"))
     (tmp_path / "session").mkdir()  # session_check has not written comparison.json yet
