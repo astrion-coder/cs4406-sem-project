@@ -235,6 +235,20 @@ def test_dry_run_prints_plan_and_bound(tmp_path, capsys):
     assert "upper bound 0.2 h" in out
 
 
+def test_run_id_names_a_run_and_resumes_only_its_own_tier(tmp_path, capsys):
+    gpath = tmp_path / "grid.yaml"
+    gpath.write_text(yaml.safe_dump(SMALL | {"tiers": SMALL["tiers"] | {"u": SMALL["tiers"]["t"]}}))
+    common = ["--grid", str(gpath), "--results", str(tmp_path), "--run-id", "all-x_t", "--dry-run"]
+    assert run_grid.main(["--tier", "t", *common]) == 0
+    (tmp_path / "all-x_t").mkdir()
+    (tmp_path / "all-x_t" / "meta.json").write_text(json.dumps({"tier": "t"}))
+    (tmp_path / "all-x_t" / "S0-go_1MiB_32B_offline.jsonl").write_text("")
+    capsys.readouterr()
+    assert run_grid.main(["--tier", "t", *common]) == 0
+    assert "9 (cell, phase) runs to do, 1 done" in capsys.readouterr().out
+    assert run_grid.main(["--tier", "u", *common]) == run_grid.EXIT_USAGE
+
+
 # The on_ac_power fixture does not reach a child process, so the CLI runs with the same stub applied first.
 RUN_GRID_ON_AC = (
     "import runpy; from cs4406_sem_project.harness import hygiene; "

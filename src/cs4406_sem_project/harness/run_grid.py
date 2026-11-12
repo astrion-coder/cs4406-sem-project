@@ -360,6 +360,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--grid", type=Path, default=gridmod.GRID_PATH)
     p.add_argument("--tier", default="tier1")
     p.add_argument("--resume", metavar="RUN_ID", help="continue results/raw/RUN_ID")
+    p.add_argument("--run-id", help="name a new run of --tier, or continue it if results/raw/RUN_ID exists")
     p.add_argument("--dry-run", action="store_true", help="print the plan and an upper time bound")
     p.add_argument("--results", type=Path, default=RESULTS)
     p.add_argument("--adapter-dir", type=Path, default=ADAPTER_DIR)
@@ -368,11 +369,15 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     grid = gridmod.load(args.grid)
-    if args.resume:
-        run_id = args.resume
+    named = args.run_id and (args.results / args.run_id / "meta.json").exists()
+    if args.resume or named:
+        run_id = args.resume or args.run_id
         tier = json.loads((args.results / run_id / "meta.json").read_text())["tier"]
+        if named and tier != args.tier:
+            print(f"{run_id} is a {tier} run, not {args.tier}", file=sys.stderr)
+            return EXIT_USAGE
     else:
-        run_id, tier = new_run_id(args.tier), args.tier
+        run_id, tier = args.run_id or new_run_id(args.tier), args.tier
     cells = gridmod.expand(grid, tier)
     run_dir = args.results / run_id
 

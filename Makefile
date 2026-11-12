@@ -110,6 +110,18 @@ analyse:
 figures:
 	uv run python -m cs4406_sem_project.analysis.plots $(RUNS_ARGS) $(if $(SESSION),--session $(SESSION)) $(if $(NETEM),--netem $(NETEM)) $(if $(LOADRUN),--loadgen $(LOADRUN)) --out results/figures
 
+# Spec 14: rebuild, run the Tier 1 grid and the RQ1 anchors, then F1-F6 and T1-T4 from their rows, with no
+# manual step. ALL names the two runs, results/raw/<ALL>_tier1 and <ALL>_anchors, and make all with the same
+# ALL resumes them. The Tier 2 figures need their own runs first (netem, session-check, concurrency), then
+# make figures with SESSION, NETEM and LOADRUN.
+ALL ?= all-$(shell date -u +%Y%m%d)
+
+.PHONY: all
+all: build sysinfo
+	uv run python -m cs4406_sem_project.harness.run_grid --tier tier1 --run-id $(ALL)_tier1
+	uv run python -m cs4406_sem_project.harness.run_grid --tier anchors --run-id $(ALL)_anchors
+	$(MAKE) figures RUNS="results/raw/$(ALL)_tier1 results/raw/$(ALL)_anchors"
+
 # RQ3b and RQ3a (task SG-6). Bring the link up first: sudo src/cs4406_sem_project/harness/dummynet.sh up <profile>
 # then calibrate it (gate G4). PROFILE=none runs the loopback baseline. RUN_ID groups every profile of one run.
 netem: adapters
