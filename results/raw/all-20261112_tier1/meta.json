@@ -1,0 +1,7 @@
+{
+ "run_id": "all-20261112_tier1",
+ "tier": "tier1",
+ "git_sha_harness": "e3eaf258a36c762d5b5d5d5b0caa553ff037b550",
+ "platform": "arm64-darwin-Apple M1 Pro",
+ "started": "2026-11-12T09:06:36.226877+00:00"
+}

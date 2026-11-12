@@ -1,0 +1,74 @@
+[
+ {
+  "cell_id": "S0-go_1GiB_1bit_offline",
+  "arm": "S0-go",
+  "db_bytes": 1073741824,
+  "record_bytes": null,
+  "phase": "offline",
+  "reps": 3,
+  "warmup": 1,
+  "seed": 1234,
+  "timeout_s": 7200.0,
+  "binary": "simplepir-adapter"
+ },
+ {
+  "cell_id": "S0-go_1GiB_1bit_online",
+  "arm": "S0-go",
+  "db_bytes": 1073741824,
+  "record_bytes": null,
+  "phase": "online",
+  "reps": 30,
+  "warmup": 1,
+  "seed": 1234,
+  "timeout_s": 7200.0,
+  "binary": "simplepir-adapter"
+ },
+ {
+  "cell_id": "S3_1KiB_1bit_offline",
+  "arm": "S3",
+  "db_bytes": 1024,
+  "record_bytes": null,
+  "phase": "offline",
+  "reps": 5,
+  "warmup": 1,
+  "seed": 1234,
+  "timeout_s": 900.0,
+  "binary": "apir-adapter"
+ },
+ {
+  "cell_id": "S3_1KiB_1bit_online",
+  "arm": "S3",
+  "db_bytes": 1024,
+  "record_bytes": null,
+  "phase": "online",
+  "reps": 30,
+  "warmup": 1,
+  "seed": 1234,
+  "timeout_s": 900.0,
+  "binary": "apir-adapter"
+ },
+ {
+  "cell_id": "S4_1KiB_1bit_offline",
+  "arm": "S4",
+  "db_bytes": 1024,
+  "record_bytes": null,
+  "phase": "offline",
+  "reps": 5,
+  "warmup": 1,
+  "seed": 1234,
+  "timeout_s": 2700.0,
+  "binary": "apir-adapter"
+ },
+ {
+  "cell_id": "S4_1KiB_1bit_online",
+  "arm": "S4",
+  "db_bytes": 1024,
+  "record_bytes": null,
+  "phase": "online",
+  "reps": 30,
+  "warmup": 1,
+  "seed": 1234,
+  "timeout_s": 2700.0,
+  "binary": "apir-adapter"
+ }
+]

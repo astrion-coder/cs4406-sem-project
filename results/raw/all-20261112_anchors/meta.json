@@ -1,0 +1,7 @@
+{
+ "run_id": "all-20261112_anchors",
+ "tier": "anchors",
+ "git_sha_harness": "aef20f5cc8438a56265de621c1d2b2a6c620081d",
+ "platform": "arm64-darwin-Apple M1 Pro",
+ "started": "2026-11-12T21:31:12.663936+00:00"
+}
