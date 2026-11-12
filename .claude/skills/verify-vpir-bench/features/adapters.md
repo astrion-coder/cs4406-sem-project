@@ -9,7 +9,7 @@
 - `adapters-fault` injects a fault into a verifiable arm, which reports `detected: true` on every faulted repetition.
 - `adapters-recovery` follows a recovery policy after each detected fault. Under `--recovery switch_replica` with honest replicas (no `--replicas-cheat`), every faulted repetition ends `recovered`, and the record carries `recovery_attempts`, `recovery_s`, `recovery_cpu_s` and the attempt's bytes. A two-server arm's `recovery_s` counts its servers in parallel, its slower answer, while `recovery_cpu_s` sums both (`src/adapters/README.md`, "Recovery").
 - `adapters-usage` rejects an invalid command line with exit 2, for example `--recovery retry_same` (decision 12).
-- `adapters-unsupported` writes `unsupported_params` records and exits 0 for a size the scheme does not support. S3 supports exactly 1 MiB, 16 MiB, 128 MiB and 1 GiB, and nothing between.
+- `adapters-unsupported` writes `unsupported_params` records and exits 0 for a size the scheme does not support. S3 supports exactly 1 KiB, 1 MiB, 16 MiB, 128 MiB and 1 GiB, and nothing between.
 
 ## How to get to it (user POV)
 

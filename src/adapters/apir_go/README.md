@@ -104,7 +104,7 @@ M1 has a second guard (`refuseDecode` in `xorpir.go`). `merkle.DecodeProof` read
 | M0 | `servers`, `query` (`xor_shares`), `db_rows`, `db_cols`, `record_bytes`, `stored_block_bytes` |
 | M1 | M0's keys plus `hash` (BLAKE3) and `proof_bytes` |
 
-`tECC` is 4, 5, 6 and 7 at 2^23, 2^27, 2^30 and 2^33 bits (plan decision 9), computed with `scripts/integrity_amplification.py` at the 2^-64 target. Any other S3 size writes one `status="unsupported_params"` record per phase, with the reason in `error`.
+`tECC` is 4, 5, 6 and 7 at 2^23, 2^27, 2^30 and 2^33 bits (plan decision 9), computed with `scripts/integrity_amplification.py` at the 2^-64 target. The RQ1 anchor adds 3 at 2^13 bits, 1 KiB (decision 21), the value `simulations/simul.go` itself uses. Any other S3 size writes one `status="unsupported_params"` record per phase, with the reason in `error`.
 
 ## Serve mode
 

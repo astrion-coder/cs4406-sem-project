@@ -15,7 +15,9 @@ import (
 // bits. Computed with the authors' scripts/integrity_amplification.py at the
 // paper's 2^-64 integrity target (p.3845), with db_sizes extended to 2^27 and
 // 2^30 (plan decision 9). simulations/simul.go defines only 2^13, 2^23, 2^33.
-var tECCByBits = map[int]int{1 << 23: 4, 1 << 27: 5, 1 << 30: 6, 1 << 33: 7}
+// 2^13 (1 KiB) is the RQ1 anchor at Colombo et al.'s smallest Fig 6 size
+// (decision 21); simul.go and the script both give 3.
+var tECCByBits = map[int]int{1 << 13: 3, 1 << 23: 4, 1 << 27: 5, 1 << 30: 6, 1 << 33: 7}
 
 // lwePlusCell is S3: client.NewAmplify runs 2*tECC+1 independent LWE
 // instances over one bit matrix and majority-decodes them.
@@ -35,7 +37,7 @@ type lwePlusCell struct {
 func newLWEPlusCell(g geometry, seed uint64) (cell, error) {
 	t, ok := tECCByBits[g.dbBits]
 	if !ok {
-		return nil, unsupportedError{fmt.Sprintf("LWE+ has a tECC value only for 2^23, 2^27, 2^30 and 2^33 bits (1 MiB, 16 MiB, 128 MiB, 1 GiB); got %d bits", g.dbBits)}
+		return nil, unsupportedError{fmt.Sprintf("LWE+ has a tECC value only for 2^13, 2^23, 2^27, 2^30 and 2^33 bits (1 KiB, 1 MiB, 16 MiB, 128 MiB, 1 GiB); got %d bits", g.dbBits)}
 	}
 	rows, cols := database.CalculateNumRowsAndColumns(g.dbBits, true)
 	c := &lwePlusCell{g: g, seed: seed, tECC: t, bits: streamBytes(seed, "db", rows*cols/8+1)}
