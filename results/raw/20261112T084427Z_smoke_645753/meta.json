@@ -1,0 +1,7 @@
+{
+ "run_id": "20261112T084427Z_smoke_645753",
+ "tier": "smoke",
+ "git_sha_harness": "7fdf64f623c88a08ea9ba64cf97f45d2ec7c5954",
+ "platform": "arm64-darwin-Apple M1 Pro",
+ "started": "2026-11-12T08:44:27.502317+00:00"
+}
