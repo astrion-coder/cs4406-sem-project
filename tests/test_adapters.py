@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from cs4406_sem_project.harness import memcap
+from cs4406_sem_project.harness import memcap, validate
 
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER_DIR = Path(os.environ.get("VPIR_ADAPTER_DIR", ROOT / "build" / "adapters"))
@@ -352,3 +352,22 @@ def test_usage_errors(arm, run):
     if arm.record_sizes == (0,):
         r = run(arm, record_bytes=32, reps=1, warmup=0)
         assert r.returncode == 2, f"--record-bytes 32 exited {r.returncode}, expected 2"
+
+
+def test_s0go_one_bit_anchor(run):
+    """--record-bytes 0 is SimplePIR's README setup (decision 21): one-bit entries packed several to a
+    Z_p element. Upstream Query and Recover mis-address those past the first element, so the adapter
+    addresses them itself, and every bit must still come back right."""
+    r = run(BY_NAME["S0-go"], record_bytes=0)
+    assert r.returncode == 0, r.stderr[-1500:]
+    online = [x for x in r.records if x["phase"] == "online"]
+    assert online and all(x["correct"] for x in online)
+    assert all(x["record_bytes"] is None and x["retrieved_bits"] == 1 and x["n_records"] == 8 * DB_BYTES
+               for x in r.records)
+    assert r.records[0]["scheme_params"]["packing"] > 1
+    assert [str(p) for x in r.records for p in validate.check_row(x) if p.severity == "error"] == []
+
+
+def test_s0go_one_bit_refuses_faults(run):
+    r = run(BY_NAME["S0-go"], record_bytes=0, reps=1, warmup=0, fault="flip_answer_bit")
+    assert r.returncode == 2, f"one-bit entries with a fault exited {r.returncode}, expected 2"

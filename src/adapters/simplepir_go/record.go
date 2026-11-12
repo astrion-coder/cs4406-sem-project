@@ -10,7 +10,7 @@ type Record struct {
 	Arm           string     `json:"arm"`
 	SchemeParams  any        `json:"scheme_params"`
 	DBBytes       int64      `json:"db_bytes"`
-	RecordBytes   int64      `json:"record_bytes"`
+	RecordBytes   *int64     `json:"record_bytes"` // null for one-bit entries, as S3 and S4 write
 	RetrievedBits int64      `json:"retrieved_bits"`
 	NRecords      uint64     `json:"n_records"`
 	Phase         string     `json:"phase"`

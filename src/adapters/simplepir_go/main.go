@@ -45,8 +45,10 @@ func parse(args []string) (cfg config, phase string, reps, warmup int, out strin
 	switch {
 	case *armF != arm:
 		bad("unknown arm %q, this adapter serves %s", *armF, arm)
-	case cfg.recordBytes < 1:
-		bad("--record-bytes must be at least 1, got %d", cfg.recordBytes)
+	case cfg.recordBytes < 0:
+		bad("--record-bytes must be 0 (one-bit entries) or more, got %d", cfg.recordBytes)
+	case cfg.recordBytes == 0 && cfg.fault != "none":
+		bad("--record-bytes 0 (one-bit entries, the RQ1 anchor) runs only with --fault none")
 	case cfg.dbBytes < cfg.recordBytes:
 		bad("--db-bytes %d is smaller than --record-bytes %d", cfg.dbBytes, cfg.recordBytes)
 	case phase != "offline" && phase != "online" && phase != "all":
@@ -183,8 +185,8 @@ func unsupportedRecord(cfg config, phase string, rep int, cause error) Record {
 		RunID: cfg.runID, GitSHAHarness: cfg.gitSHA, Platform: cfg.platform,
 		UpstreamSHA: upstreamSHA, Adapter: "simplepir_go", Arm: cfg.arm,
 		SchemeParams: map[string]any{},
-		DBBytes:      cfg.dbBytes, RecordBytes: cfg.recordBytes, RetrievedBits: 8 * cfg.recordBytes,
-		NRecords: uint64(cfg.dbBytes / cfg.recordBytes), Phase: phase, Rep: rep, Seed: cfg.seed,
+		DBBytes:      cfg.dbBytes, RecordBytes: recordBytesField(cfg.recordBytes), RetrievedBits: retrievedBits(cfg.recordBytes),
+		NRecords: nRecords(cfg.dbBytes, cfg.recordBytes), Phase: phase, Rep: rep, Seed: cfg.seed,
 		Fault: cfg.fault, FaultProb: cfg.faultProb, Recovery: cfg.recovery,
 		Status: "unsupported_params", Error: sptr(cause.Error()),
 		Metrics: Metrics{ProcessPeakRSSBytes: peakRSS()},

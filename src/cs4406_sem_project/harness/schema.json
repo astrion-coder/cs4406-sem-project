@@ -161,9 +161,14 @@
           "then": {"properties": {"metrics": {"required": ["rtt_s", "rtt_cpu_s"]}}}
         },
         {
+          "description": "One-bit retrieval has no record size. S3 and S4 always retrieve one bit; S0-go does only as the SimplePIR README anchor (decision 21).",
           "if": {"properties": {"arm": {"enum": ["S3", "S4"]}}},
           "then": {"properties": {"record_bytes": {"const": null}, "retrieved_bits": {"const": 1}}},
-          "else": {"properties": {"record_bytes": {"type": "integer"}}}
+          "else": {
+            "if": {"properties": {"arm": {"const": "S0-go"}, "record_bytes": {"const": null}}},
+            "then": {"properties": {"retrieved_bits": {"const": 1}}},
+            "else": {"properties": {"record_bytes": {"type": "integer"}}}
+          }
         }
       ]
     },

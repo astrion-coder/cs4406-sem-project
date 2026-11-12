@@ -81,6 +81,48 @@ func (s *session) record(r uint64, buf []byte) {
 	s.records.fill(buf, r*uint64(s.lay.RecordBytes))
 }
 
+// truth is record r's pieces as the generator made them; a one-bit record is
+// bit r of the stream.
+func (s *session) truth(r uint64) []uint64 {
+	if s.lay.OneBit {
+		var b [1]byte
+		s.records.fill(b[:], r/8)
+		return []uint64{uint64(b[0]>>(r%8)) & 1}
+	}
+	buf := make([]byte, s.lay.RecordBytes)
+	s.record(r, buf)
+	return pieces(buf, s.lay.Pieces)
+}
+
+// oneBitDB packs the seeded bits into the matrix exactly as MakeDB does
+// (Packing consecutive entries per element, then Sub(P/2)). MakeDB takes one
+// uint64 per entry, which at the 2^33-entry anchor would be 64 GiB.
+func (s *session) oneBitDB() *pir.Database {
+	db := pir.SetupDB(s.lay.Entries, 1, &s.p)
+	db.Data = pir.MatrixZeros(s.p.L, s.p.M)
+	pack, m, total := s.lay.Packing, s.p.M, s.lay.Entries/8
+	buf := make([]byte, 1<<20)
+	at, cur, j := uint64(0), uint64(0), uint64(0)
+	for off := uint64(0); off < total; off += uint64(len(buf)) {
+		chunk := buf[:min(uint64(len(buf)), total-off)]
+		s.records.fill(chunk, off)
+		for _, b := range chunk {
+			for k := 0; k < 8; k++ {
+				cur |= uint64(b>>k&1) << j
+				if j++; j == pack {
+					db.Data.Set(cur, at/m, at%m)
+					at, cur, j = at+1, 0, 0
+				}
+			}
+		}
+	}
+	if j > 0 {
+		db.Data.Set(cur, at/m, at%m)
+	}
+	db.Data.Sub(s.p.P / 2)
+	return db
+}
+
 func newSession(cfg config, lay Layout, pi *pir.SimplePIR) (*session, error) {
 	s := &session{
 		cfg: cfg, pi: pi, lay: lay, p: lay.Params,
@@ -89,6 +131,14 @@ func newSession(cfg config, lay Layout, pi *pir.SimplePIR) (*session, error) {
 		faultOn:  newStream("fault-online", cfg.seed),
 		faultOff: newStream("fault-offline", cfg.seed),
 		check:    newStream("check", cfg.seed),
+	}
+	if lay.OneBit {
+		s.db = s.oneBitDB()
+		runtime.GC()
+		if err := s.spotCheck(64); err != nil {
+			return nil, err
+		}
+		return s, nil
 	}
 	vals := make([]uint64, lay.Entries)
 	buf := make([]byte, lay.RecordBytes)
@@ -134,11 +184,9 @@ func (s *session) staleDB(buf []byte) *pir.Database {
 // spotCheck reads random records back out of the unsquished database and
 // compares them with the generator, so a layout or Reset bug cannot hide.
 func (s *session) spotCheck(count int) error {
-	buf := make([]byte, s.lay.RecordBytes)
 	for i := 0; i < count; i++ {
 		r := s.check.below(s.lay.Records)
-		s.record(r, buf)
-		for k, want := range pieces(buf, s.lay.Pieces) {
+		for k, want := range s.truth(r) {
 			if got := s.db.GetElem(s.lay.Entry(r, k)); got != want {
 				return fmt.Errorf("database entry check failed: record %d piece %d got %x want %x", r, k, got, want)
 			}
@@ -152,7 +200,7 @@ func (s *session) base(phase string, rep, warmup int) Record {
 	return Record{
 		RunID: c.runID, GitSHAHarness: c.gitSHA, Platform: c.platform,
 		UpstreamSHA: upstreamSHA, Adapter: "simplepir_go", Arm: c.arm,
-		DBBytes: c.dbBytes, RecordBytes: c.recordBytes, RetrievedBits: 8 * c.recordBytes,
+		DBBytes: c.dbBytes, RecordBytes: recordBytesField(c.recordBytes), RetrievedBits: retrievedBits(c.recordBytes),
 		NRecords: s.lay.Records, Phase: phase, Rep: rep, IsWarmup: rep < warmup,
 		Seed: c.seed, Fault: c.fault, FaultProb: c.faultProb, Recovery: c.recovery,
 		Status: "ok", SchemeParams: s.schemeParams(),
@@ -284,7 +332,7 @@ func (s *session) recoverRecord(idx uint64, query, ans pir.Msg, cstate pir.State
 	vals := make([]uint64, info.Ne)
 	for k := range got {
 		entry := s.lay.Entry(idx, k)
-		row := entry / p.M
+		row := s.lay.element(entry) / p.M
 		for e := range vals {
 			j := row*info.Ne + uint64(e)
 			vals[e] = p.Round(uint64(a.Data[j]-interm.Data[j]) + offset)
@@ -326,7 +374,7 @@ func (s *session) onlineRecord(rep, warmup int) (Record, error) {
 
 	var cstate pir.State
 	var query pir.Msg
-	qg := timed(func() { cstate, query = s.pi.Query(s.lay.Entry(idx, 0), s.clientA, p, db.Info) })
+	qg := timed(func() { cstate, query = s.pi.Query(s.lay.element(s.lay.Entry(idx, 0)), s.clientA, p, db.Info) })
 	qBytes := encode(query.Data[0])
 	qRows := query.Data[0].Rows
 	serverQuery := pir.MakeMsgSlice(pir.MakeMsg(decode(qBytes, qRows, 1)))
@@ -337,9 +385,7 @@ func (s *session) onlineRecord(rep, warmup int) (Record, error) {
 	down := int64(len(aBytes))
 	dropped := faulted && s.cfg.fault == "drop_server"
 
-	want := make([]byte, s.lay.RecordBytes)
-	s.record(idx, want)
-	wantPieces := pieces(want, s.lay.Pieces)
+	wantPieces := s.truth(idx)
 
 	// The first targeted fault is checked against an untimed honest decode:
 	// the honest client must return the record, and the fault must change it.
@@ -362,7 +408,7 @@ func (s *session) onlineRecord(rep, warmup int) (Record, error) {
 			if s.lay.Records > 1 {
 				other = (idx + 1 + s.faultOn.below(s.lay.Records-1)) % s.lay.Records
 			}
-			_, oq := s.pi.Query(s.lay.Entry(other, 0), s.clientA, p, db.Info)
+			_, oq := s.pi.Query(s.lay.element(s.lay.Entry(other, 0)), s.clientA, p, db.Info)
 			oa := s.pi.Answer(db, pir.MakeMsgSlice(oq), s.serverState, s.serverShared, p)
 			aBytes = encode(oa.Data[0])
 		case "stale_record":
@@ -391,7 +437,9 @@ func (s *session) onlineRecord(rep, warmup int) (Record, error) {
 
 	var got []uint64
 	rc := timed(func() { got = s.recoverRecord(idx, query, clientAns, cstate) })
-	if !s.decodeChecked {
+	// Upstream Recover mis-addresses packed entries (see Layout.element), so a
+	// one-bit layout is checked against the generator alone, through correct.
+	if !s.decodeChecked && !s.lay.OneBit {
 		if err := s.checkAgainstUpstream(idx, got, query, clientAns, cstate); err != nil {
 			return Record{}, err
 		}

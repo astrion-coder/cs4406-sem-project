@@ -170,6 +170,20 @@ def test_fake_preprocessing_is_refused():
     assert "fake_preproc" in _errors(row)
 
 
+def _one_bit(row: dict) -> dict:
+    row["record_bytes"], row["retrieved_bits"], row["n_records"] = None, 1, 8 * row["db_bytes"]
+    return row
+
+
+def test_one_bit_rows_only_for_s0go_s3_s4():
+    """Decision 21: S0-go retrieves one bit as the SimplePIR README anchor; no other record-size arm does."""
+    assert _errors(_one_bit(_base("S0-go", "online"))) == []
+    assert "record_bytes" in _errors(_one_bit(_base("S1", "online")))
+    row = _one_bit(_base("S0-go", "online"))
+    row["retrieved_bits"] = 8
+    assert "retrieved_bits" in _errors(row)
+
+
 def test_platform_mismatch_is_refused():
     row = _base("S1", "online")
     row["platform"] = "x86_64-linux-Something"

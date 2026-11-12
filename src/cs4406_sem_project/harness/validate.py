@@ -88,9 +88,9 @@ Rule = Callable[[dict], Iterator[tuple[Severity, str, str]]]
 def _rule_identity(r: dict):
     if r["adapter"] != ADAPTER_OF[r["arm"]]:
         yield "error", "adapter", f"arm {r['arm']} is served by {ADAPTER_OF[r['arm']]}, not {r['adapter']}"
-    if r["arm"] in ONE_BIT_ARMS:
+    if r["arm"] in ONE_BIT_ARMS or r["record_bytes"] is None:
         if r["n_records"] != 8 * r["db_bytes"]:
-            yield "error", "n_records", "S3 and S4 count bits: n_records must be 8 x db_bytes"
+            yield "error", "n_records", "one-bit rows count bits: n_records must be 8 x db_bytes"
     else:
         if r["retrieved_bits"] != 8 * r["record_bytes"]:
             yield "error", "retrieved_bits", "must be 8 x record_bytes"
