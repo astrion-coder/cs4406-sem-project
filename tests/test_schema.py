@@ -11,14 +11,19 @@ ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "results" / "raw"
 
 
-NOTEBOOK_SUMMARIES = {"hygiene.jsonl", "peak_footprints.jsonl", "results.jsonl", "s4_cells.jsonl",
-                      "s4_costs.jsonl"}
+def _is_record(row: dict) -> bool:
+    """Notebook summaries share results/raw/ with the records and carry neither a run_id nor mode "serve"."""
+    return "run_id" in row or row.get("mode") == "serve"
 
 
 def _raw_rows() -> list[tuple[str, int, dict]]:
-    return [(str(path.relative_to(ROOT)), n, json.loads(line))
-            for path in sorted(RAW.rglob("*.jsonl")) if path.name not in NOTEBOOK_SUMMARIES
-            for n, line in enumerate(path.read_text().splitlines(), 1)]
+    """Every row of every record file, so one malformed row in a record file still fails the test."""
+    out = []
+    for path in sorted(RAW.rglob("*.jsonl")):
+        rows = [json.loads(line) for line in path.read_text().splitlines()]
+        if rows and _is_record(rows[0]):
+            out += [(str(path.relative_to(ROOT)), n, r) for n, r in enumerate(rows, 1)]
+    return out
 
 
 RAW_ROWS = _raw_rows()
