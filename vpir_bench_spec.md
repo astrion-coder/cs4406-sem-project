@@ -1,6 +1,6 @@
 # Implementation Spec — *The Price of Verifiability in PIR: an independent, common-hardware re-evaluation*
 
-**Project:** CS4406 semester project · **Spec version:** 1.6 (2026-11-10). v1.6 revises decision 10: S4 runs at 64 KiB, 256 KiB and 1 MiB with a 45-minute cap, and larger sizes are extrapolated. v1.5 adds decisions 18 to 20 in `plan.md`, on how the adapters lay out and decode multi-piece records. v1.4 records the humans' answers to the [HUMAN] questions (decisions 1 to 17 in `plan.md`), pins apir-code to the commit before DPF queries were added, and removes the dpf-go arm64 port. v1.3 runs everything natively on macOS on one Apple-silicon Mac, with a Homebrew toolchain and all code under `src/`. v1.2 corrected M0 (classic XOR two-server PIR, not DPF) and the Colombo et al. targets after checking the paper. v1.1 added query-volume, network, concurrency, multicore and measured-recovery experiments (RQ3a/3b, RQ4, RQ6, RQ7) and the prior-coverage table (§2.1).
+**Project:** CS4406 semester project · **Spec version:** 1.7 (2026-11-12). v1.7 adds decisions 21 to 24 in `plan.md`: the RQ1 anchors run (S0-go one-bit entries through `--record-bytes 0`, S3 and S4 at 1 KiB), RQ3b emulates LAN at bandwidth only, smoke runs S4 at 64 KiB, and prices stay null. v1.6 revises decision 10: S4 runs at 64 KiB, 256 KiB and 1 MiB with a 45-minute cap, and larger sizes are extrapolated. v1.5 adds decisions 18 to 20 in `plan.md`, on how the adapters lay out and decode multi-piece records. v1.4 records the humans' answers to the [HUMAN] questions (decisions 1 to 17 in `plan.md`), pins apir-code to the commit before DPF queries were added, and removes the dpf-go arm64 port. v1.3 runs everything natively on macOS on one Apple-silicon Mac, with a Homebrew toolchain and all code under `src/`. v1.2 corrected M0 (classic XOR two-server PIR, not DPF) and the Colombo et al. targets after checking the paper. v1.1 added query-volume, network, concurrency, multicore and measured-recovery experiments (RQ3a/3b, RQ4, RQ6, RQ7) and the prior-coverage table (§2.1).
 **Audience:** a coding LLM (or engineer) building the benchmark harness, plus the student team who own the scientific decisions.
 
 > **How to use this document.** Sections 1–3 give the scientific context; the coding agent should read them but not change them. Sections 4–11 are the build contract. Appendix A is a prompt you can paste in front of this spec. Anything marked **[HUMAN]** is a decision or check the students must make; the coding agent must stop and ask instead of guessing. "Decision N" refers to the humans' numbered decisions in `plan.md`.
@@ -94,7 +94,7 @@ Use **only the authors' reference implementations**. The coding agent must **not
 **Database size** (total bytes): 1 MiB, 16 MiB, 128 MiB, 1 GiB. The reference machine has 16 GiB RAM (§7), so there is no 4 GiB size. A cell that runs out of memory is a result. Record it as `status="oom"`.
 **Record size *d***: 32 B, 256 B, 1 KiB, 8 KiB. 1 KiB is the anchor; it matches Colombo et al.'s 1 KiB records.
 Entries *N* = DB bytes / record bytes. Some arms take sizes in **bits** (apir-code's `DBBitLengths`; SimplePIR's `D` = bits per entry), so convert in exactly one place, in `src/cs4406_sem_project/harness/grid.py`.
-Also run the paper-native configurations (SimplePIR 2^33 × 1 bit; apir 1 KiB / 1 MiB / 1 GiB with 8192 bits retrieved) as RQ1 anchors. An anchor may not fit in 16 GiB. If it runs out of memory, record `status="oom"` and do not shrink the anchor.
+Also run the paper-native configurations as RQ1 anchors (decision 21). SimplePIR's README setup is 1 GiB as 2^33 one-bit entries: S0-go reads `--record-bytes 0` as one-bit entries, as S3 and S4 do, so the §9 command line is unchanged. Colombo et al.'s single-server sizes are 1 KiB, 1 MiB and 1 GiB with one bit retrieved. The grid already has S3 and S4 at 1 MiB and S3 at 1 GiB (S4's 1 GiB is extrapolated, decision 10), so the anchor tier adds S3 and S4 at 1 KiB, with S3 at `tECC` = 3 from the authors' `scripts/integrity_amplification.py` at the 2^-64 target. The two-server anchors (1 KiB records, so 8192 bits retrieved) are grid cells already. An anchor may not fit in 16 GiB. If it runs out of memory, record `status="oom"` and do not shrink the anchor.
 
 **One-bit schemes.** S3 (LWE+) and S4 (DDH) retrieve one bit per query, so they report cost per retrieved bit at each database size and are left out of the record-size sweep. S4 runs at 64 KiB, 256 KiB and 1 MiB, with a 45-minute cap per cell. At the repetition counts below its offline cell takes 34 min at 1 MiB and would take an extrapolated 517 min at 16 MiB and 3985 min at 128 MiB, so those two sizes come from the fitted linear scaling (exponents 0.98 for the digest and 0.97 per query) and every such number is labelled extrapolated (decision 10, `notebooks/06_s4_cost.ipynb`).
 
@@ -122,7 +122,7 @@ The extensions run only on **focus cells**, to keep runtime bounded: DB ∈ {128
 
 | Experiment | Axis | Values | Reps |
 |---|---|---|---|
-| RQ3b network (measured) | Emulated link via macOS dummynet (`dnctl` pipes attached with `pfctl` rules on `lo0`) between client and server processes on loopback. Both commands need `sudo`, so the humans run `src/cs4406_sem_project/harness/dummynet.sh` | the three profiles in the table above | 30 per profile |
+| RQ3b network (measured) | Emulated link via macOS dummynet (`dnctl` pipes attached with `pfctl` rules on `lo0`) between client and server processes on loopback. Both commands need `sudo`, so the humans run `src/cs4406_sem_project/harness/dummynet.sh`. `dnctl` rounds a delay up to the kernel tick (10 ms here, `sysctl kern.clockrate`), so LAN runs at its bandwidth with no added delay (decision 22) | the three profiles in the table above | 30 per profile |
 | RQ6 concurrency, closed loop | concurrent clients *C* | 1, 2, 4, 8, 16, 32, 64 (stop when p95 latency > 10× the *C*=1 value) | 60 s steady state after 10 s warm-up, 3 runs |
 | RQ6 concurrency, open loop | Poisson arrival rate λ | 10 %, 25 %, 50 %, 75 %, 90 %, 100 %, 110 % of the saturation throughput measured in closed loop | 60 s, 3 runs |
 | RQ7 multicore | server worker threads/cores *W* | 1, 2, 4, 6 (up to the 6 performance cores of the reference machine, §7) | 30 |
@@ -180,7 +180,7 @@ Expected cost under cheating rate *f* (RQ4) is reported **both** measured (the *
 - `latency_e2e(profile) = query_gen + up_bytes/up_bw + RTT·rounds + server_answer(max) + down_bytes/down_bw + client_recover + client_verify`. `rounds` is 1 for every arm: each query is one round trip, and LWE+ (S3) sends its 2t+1 sub-queries in that one round (decision 15).
 - `amortised_bytes(Q) = (offline_down + offline_up)/Q + up + down`; `amortised_client_s(Q)`, `amortised_server_s(Q)` analogously.
 - `break_even_Q(A, B)`: smallest Q at which arm A's amortised cost is ≤ arm B's.
-- Optional `$ per 1k queries` from `configs/prices.yaml`: CPU-hour and egress-GB prices **entered by the students with a date and source URL**. The agent must not invent prices.
+- Optional `$ per 1k queries` from `configs/prices.yaml`: CPU-hour and egress-GB prices **entered by the students with a date and source URL**. The agent must not invent prices. The humans left them null (decision 24), so this metric is not reported.
 
 ## 7. Testbed and environment
 
@@ -344,10 +344,10 @@ Each adapter is a standalone CLI. They must all behave identically so the harnes
 | `test_comm_analytical` | Measured bytes = analytical bytes within 1 % for every cell |
 | `test_schema` | Every raw record validates against `src/cs4406_sem_project/harness/schema.json` |
 | `test_resume` | Killing `run_grid.py` mid-run and restarting completes only the missing cells |
-| `smoke` | `make smoke` runs every arm at 1 MiB × 1 KiB × 3 reps in < 10 min and produces all figures from those rows |
+| `smoke` | `make smoke` runs the six record-size arms at 1 MiB × 1 KiB, S3 at 1 MiB and S4 at 64 KiB, 3 reps each, in < 10 min, and produces all figures from those rows (decision 23) |
 | `test_concurrent_correctness[arm]` | Serve mode, *C* = 16 clients, 1 000 queries: every answer correct and byte-identical to the sequential bench-mode answer for the same query seed |
 | `test_loadgen_not_bottleneck` | Load-generator CPU < 70 % at the highest *C* used; otherwise add load-generator cores or a second machine |
-| `test_netem_calibration` | Over the dummynet pipes on `lo0`, measured RTT within ±10 % and bandwidth within ±10 % of each profile (ping, iperf3) before any RQ3b run |
+| `test_netem_calibration` | Over the dummynet pipes on `lo0`, measured RTT within ±10 % and bandwidth within ±10 % of each profile (ping, iperf3) before any RQ3b run. LAN checks bandwidth only and records its measured RTT (decision 22) |
 | `test_recovery[arm, fault, policy]` | `recovered` within the policy's attempt budget when the replica is honest; `aborted` (never `silent_wrong`) when all servers cheat; 0 false rejects across 1 000 honest queries |
 | RQ1 sanity | SimplePIR 1 GB anchor: hint ≈ 121 MB and online ≈ 242 KB (deterministic), else investigate before proceeding |
 
