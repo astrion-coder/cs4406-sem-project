@@ -1,0 +1,5 @@
+# Spec 5 network profiles. amortise.py models end-to-end latency with them (RQ3b), and
+# harness/dummynet.sh builds the emulated links from the same values (gate G4).
+lan:       {down_mbps: 1000, up_mbps: 1000, rtt_ms: 0.5}
+broadband: {down_mbps: 100,  up_mbps: 20,   rtt_ms: 20}
+mobile:    {down_mbps: 10,   up_mbps: 5,    rtt_ms: 60}

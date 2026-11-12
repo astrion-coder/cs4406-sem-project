@@ -1,0 +1,14 @@
+# Optional "$ per 1k queries" (spec 6). Students enter every price with its date and source URL.
+# The agent must not invent prices (spec 10 rule 4), so every value starts null.
+# TODO[HUMAN] SG: fill in, or leave null and the analysis skips the dollar figures.
+
+cpu_hour:
+  usd: null
+  instance: null  # e.g. the cloud instance type the price is for
+  source_url: null
+  date: null
+
+egress_gb:
+  usd: null
+  source_url: null
+  date: null
