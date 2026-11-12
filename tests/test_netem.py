@@ -13,6 +13,8 @@ from cs4406_sem_project.harness import grid as gridmod
 from cs4406_sem_project.harness import netem, validate
 from cs4406_sem_project.harness.netem import LinkError, NetemRunner
 
+pytestmark = pytest.mark.usefixtures("on_ac_power")
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "src" / "cs4406_sem_project" / "harness" / "dummynet.sh"
 FAKE = ROOT / "tests" / "fake_serve.py"

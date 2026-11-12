@@ -14,6 +14,8 @@ from cs4406_sem_project.harness import run_grid, session_check
 sys.path.insert(0, str(Path(__file__).parent))
 import fake_adapter  # noqa: E402
 
+pytestmark = pytest.mark.usefixtures("on_ac_power")
+
 ROOT = Path(__file__).resolve().parents[1]
 FAKE = ROOT / "tests" / "fake_adapter.py"
 PLATFORM = "test-platform"

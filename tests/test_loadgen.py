@@ -11,6 +11,8 @@ from cs4406_sem_project.harness import grid as gridmod
 from cs4406_sem_project.harness import loadgen, validate
 from cs4406_sem_project.harness.loadgen import LoadgenRunner, Point
 
+pytestmark = pytest.mark.usefixtures("on_ac_power")
+
 ROOT = Path(__file__).resolve().parents[1]
 FAKE_SERVE = ROOT / "tests" / "fake_serve.py"
 FAKE_LOADGEN = ROOT / "tests" / "fake_loadgen.py"

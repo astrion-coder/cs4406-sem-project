@@ -14,6 +14,8 @@ from cs4406_sem_project.harness import run_grid
 from cs4406_sem_project.harness import validate
 from cs4406_sem_project.harness.run_grid import ContractError, HygieneError, Runner
 
+pytestmark = pytest.mark.usefixtures("on_ac_power")
+
 ROOT = Path(__file__).resolve().parents[1]
 FAKE = ROOT / "tests" / "fake_adapter.py"
 PLATFORM = "test-platform"
@@ -225,6 +227,14 @@ def test_dry_run_prints_plan_and_bound(tmp_path, capsys):
     assert "upper bound 0.2 h" in out
 
 
+# The on_ac_power fixture does not reach a child process, so the CLI runs with the same stub applied first.
+RUN_GRID_ON_AC = (
+    "import runpy; from cs4406_sem_project.harness import hygiene; "
+    "hygiene.power_source = lambda: 'AC Power'; hygiene.lid_closed = lambda: False; "
+    "runpy.run_module('cs4406_sem_project.harness.run_grid', run_name='__main__')"
+)
+
+
 def test_resume(tmp_path):
     gpath = tmp_path / "grid.yaml"
     gpath.write_text(yaml.safe_dump(SMALL))
@@ -235,7 +245,7 @@ def test_resume(tmp_path):
     env.pop("FAKE_ADAPTER", None)
     common = ["--grid", str(gpath), "--results", str(results), "--reference-platform", str(ref),
               "--adapter-dir", str(tmp_path), "--launcher", f'"{sys.executable}" "{FAKE}"']
-    cli = [sys.executable, "-m", "cs4406_sem_project.harness.run_grid"]
+    cli = [sys.executable, "-c", RUN_GRID_ON_AC]
 
     first = subprocess.Popen([*cli, "--tier", "t", *common], env=env, stderr=subprocess.DEVNULL)
     deadline = time.monotonic() + 60
