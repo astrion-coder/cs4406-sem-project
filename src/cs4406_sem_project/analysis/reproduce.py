@@ -18,7 +18,7 @@ from cs4406_sem_project.harness.grid import fmt_size, parse_size
 ROOT = Path(__file__).resolve().parents[3]
 TARGETS_PATH = ROOT / "configs" / "reproduction_targets.yaml"
 
-UNITS = {"x": 1.0, "s": 1.0, "ms": 1e-3, "KiB": 1024.0, "MiB": float(1 << 20), "GB/s": 1.0}
+UNITS = {"x": 1.0, "s": 1.0, "ms": 1e-3, "h": 3600.0, "KiB": 1024.0, "MiB": float(1 << 20), "GB/s": 1.0}
 TOLERANCE = {"text": 1.05, "plot": 1.2}  # spec H1 (+-5 %); docs/reproduction_targets.md (log-axis plot reading)
 CHECKS = ("ratio", "max_ratio", "trend_up", "less", "abs")
 ONLINE = set(aggregate.METRICS["online"])
@@ -55,6 +55,7 @@ class Target:
     hi: float | None
     unit: str
     context: bool
+    extrapolated: bool = False  # read from extrapolate.py's table (one value, no CI), not from measured rows
 
     @property
     def phase(self) -> str:
@@ -81,7 +82,7 @@ def load_targets(path: Path = TARGETS_PATH) -> list[Target]:
             db=tuple(parse_size(s) for s in t["db"]), num=_side(t["num"]), den=_side(t.get("den")),
             value=None if t.get("value") is None else float(t["value"]),
             lo=None if lo is None else float(lo), hi=None if hi is None else float(hi), unit=t["unit"],
-            context=bool(t.get("context"))))
+            context=bool(t.get("context")), extrapolated=bool(t.get("extrapolated"))))
     return out
 
 
@@ -91,8 +92,19 @@ def _values(df: pd.DataFrame, side: Side, db: int, phase: str, metric: str) -> p
     return sel.set_index("rep")[metric].dropna()
 
 
-def measure(df: pd.DataFrame, t: Target, db: int) -> tuple[float, float, float] | None:
-    """The median (abs) or median ratio (all others) at one db size, with its bootstrap 95 % CI, in t.unit."""
+def _extrapolated(ext: pd.DataFrame | None, t: Target, db: int) -> tuple[float, float, float] | None:
+    if ext is None or ext.empty or t.metric not in ext:
+        return None
+    sel = ext[(ext.arm == t.num.arm) & (ext.db_bytes == db)][t.metric].dropna()
+    return None if sel.empty else (float(sel.iloc[0]) / UNITS[t.unit], np.nan, np.nan)
+
+
+def measure(df: pd.DataFrame, t: Target, db: int,
+            extrapolated: pd.DataFrame | None = None) -> tuple[float, float, float] | None:
+    """The median (abs) or median ratio (all others) at one db size, with its bootstrap 95 % CI, in t.unit.
+    An extrapolated target reads its one value from extrapolate.py's table and has no CI."""
+    if t.extrapolated:
+        return _extrapolated(extrapolated, t, db)
     num = _values(df, t.num, db, t.phase, t.metric)
     if t.den is None:
         if num.empty:
@@ -138,8 +150,9 @@ def _verdict(t: Target, ok: bool) -> str:
     return "pass" if ok else "explain"
 
 
-def compare(df: pd.DataFrame, targets: list[Target]) -> pd.DataFrame:
-    """Table T3: one row per (target, db size), plus one summary row for max_ratio and trend_up targets."""
+def compare(df: pd.DataFrame, targets: list[Target], extrapolated: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Table T3: one row per (target, db size), plus one summary row for max_ratio and trend_up targets.
+    `extrapolated` is extrapolate.extrapolate()'s table, which targets marked extrapolated read."""
     rows = []
     for t in targets:
         tol = TOLERANCE[t.precision]
@@ -147,9 +160,9 @@ def compare(df: pd.DataFrame, targets: list[Target]) -> pd.DataFrame:
                 "target": _target_text(t), "rule": t.rule, "check": t.check, "unit": t.unit,
                 "target_lo": t.value if t.check in ("ratio", "abs") and t.value is not None else t.lo,
                 "target_hi": t.value if t.value is not None else t.hi}
-        measured = {db: measure(df, t, db) for db in t.db}
+        measured = {db: measure(df, t, db, extrapolated) for db in t.db}
         for db, m in measured.items():
-            cell = t.num.label(db) + ("" if t.den is None else f" / {t.den.label(db)}")
+            cell = t.num.label(db) + ("" if t.den is None else f" / {t.den.label(db)}") + (" (extrapolated)" if t.extrapolated else "")
             if m is None:
                 rows.append(base | {"cell": cell, "verdict": "missing"})
                 continue

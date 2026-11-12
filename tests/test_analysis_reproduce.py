@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from cs4406_sem_project.analysis import frame, reproduce, synthetic
+from cs4406_sem_project.analysis import aggregate, extrapolate, frame, reproduce, synthetic
 from cs4406_sem_project.harness import grid
 
 DOC = (reproduce.ROOT / "docs" / "reproduction_targets.md").read_text(encoding="utf-8")
@@ -76,7 +76,9 @@ def test_missing_cells_are_reported_not_dropped():
 def test_every_target_has_a_row_on_the_synthetic_tier1_and_anchor_grids():
     g = grid.load()
     df = frame.rows_to_frame(synthetic.rows_for_cells(grid.expand(g, "tier1") + grid.expand(g, "anchors")))
-    t3 = reproduce.compare(df, list(TARGETS.values()))
+    ext = extrapolate.extrapolate(aggregate.medians(aggregate.summarise(df)))
+    t3 = reproduce.compare(df, list(TARGETS.values()), extrapolated=ext)
+    assert t3.set_index("id").loc["R8", "cell"].endswith("(extrapolated)")
     assert set(t3.id) == set(TARGETS)
     assert "missing" not in set(t3.verdict)
     assert set(t3.verdict) <= {"pass", "explain", "hw factor", "context (different baseline)", "see summary row"}

@@ -3,7 +3,6 @@
 # The targets that file lists but our grid cannot compute are left out here, with the reason:
 #   R6        tECC is a parameter check on scheme_params, not a measured ratio.
 #   R7        needs a run of the base LWE scheme without amplification; no arm runs it.
-#   R8        DDH at 1 GiB comes from the S4 extrapolation (decision 10, notebooks/06_s4_cost.ipynb).
 #   R4        two to five servers is Tier 3 (M1-k).
 #   R13, R14  headline ranges over 4 GiB and up, against 32-bit SimplePIR; R15 and R16 keep the compute part.
 #   R18-R21   communication at 4 to 256 GiB, recomputed with params.cpp (decision 7), not from the grid.
@@ -19,7 +18,8 @@
 #   rule: exact (communication, deterministic) | hw (compute; abs targets report the hardware factor only)
 #   precision: text (exact quote, +-5 %, spec H1) | plot (read off a figure, factor 1.2 per the doc)
 #   context: true marks a target against a different baseline than ours (decision 6); reported, never pass/fail
-#   record: a record size, or null for the one-bit arms S3 and S4
+#   extrapolated: true reads the value from analysis/extrapolate.py's S4 table (decision 10), with no CI
+#   record: a record size, or null for one-bit retrieval (S3, S4, and S0-go's README anchor)
 #   unit: of value and range; x for ratios
 
 targets:
@@ -200,6 +200,12 @@ targets:
   - {id: R11-S3-1KiB, ref: R11, where: "Fig 6, p.3846", claim: "S3 online bytes at 1 KiB",
      published: "LWE+ about 5", check: abs, rule: exact, precision: plot,
      num: {arm: S3, record: null}, metric: online_bytes, db: [1KiB], value: 5, unit: KiB}
+  # DDH at 1 GiB, extrapolated from S4's measured sizes (decision 10). Reported as the hardware factor
+  # over the paper's one hour, which is a lower bound ("over an hour").
+  - {id: R8, ref: R8, where: "Fig 6 caption, p.3846", claim: "S4 (DDH) user time at 1 GiB, extrapolated",
+     published: "DDH takes over an hour to retrieve a data bit from a 1 GiB database", check: abs, rule: hw,
+     precision: text, extrapolated: true,
+     num: {arm: S4, record: null}, metric: user_time_s, db: [1GiB], value: 1, unit: h}
 
   # SimplePIR README at the pinned SHA (spec 3), the one-bit anchor: 1 GiB as 2^33 one-bit entries
   # (decision 21). The README's MB and KB are binary: the hint is ell x n x 4 B and the online bytes

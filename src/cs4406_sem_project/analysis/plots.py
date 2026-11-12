@@ -29,7 +29,7 @@ import pandas as pd  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.ticker import EngFormatter, FuncFormatter  # noqa: E402
 
-from cs4406_sem_project.analysis import aggregate, amortise, frame, reproduce, synthetic  # noqa: E402
+from cs4406_sem_project.analysis import aggregate, amortise, extrapolate, frame, reproduce, synthetic  # noqa: E402
 from cs4406_sem_project.harness import grid, loadgen, netem, session_check  # noqa: E402
 from cs4406_sem_project.harness.grid import fmt_size  # noqa: E402
 
@@ -62,6 +62,8 @@ class Tables:
     latency: pd.DataFrame
     t3: pd.DataFrame
     breakdown: pd.DataFrame
+    extrapolated: pd.DataFrame  # S4 at sizes it does not run (decision 10), from extrapolate.py
+    fits: pd.DataFrame
     session: pd.DataFrame | None = None  # F8, from session_totals()
     emulation: pd.DataFrame | None = None  # F9, from emulation()
     load_curves: pd.DataFrame | None = None  # F10 and F11, from load_curves()
@@ -74,10 +76,12 @@ def build(df: pd.DataFrame, status: pd.DataFrame, session: pd.DataFrame | None =
     summary = aggregate.summarise(df)
     med = aggregate.medians(summary)
     latency = amortise.latency_table(df[df.phase == "online"], amortise.load_profiles())
+    ext = extrapolate.extrapolate(med)
     return Tables(
         frame=df, status=status, summary=summary, medians=med, overheads=aggregate.overheads(df),
         amortised=amortise.amortised_table(med), latency=latency,
-        t3=reproduce.compare(df, reproduce.load_targets()), breakdown=breakdown(med),
+        t3=reproduce.compare(df, reproduce.load_targets(), extrapolated=ext), breakdown=breakdown(med),
+        extrapolated=ext, fits=extrapolate.fits(med),
         session=None if session is None else session_totals(med, session),
         emulation=None if netem_rows is None or netem_rows.empty else emulation(netem_rows, latency),
         load_curves=None if loadgen_rows is None or loadgen_rows.empty else load_curves(loadgen_rows))
@@ -85,7 +89,8 @@ def build(df: pd.DataFrame, status: pd.DataFrame, session: pd.DataFrame | None =
 
 def processed(t: Tables) -> dict[str, pd.DataFrame]:
     out = {"frame": t.frame, "status": t.status, "summary": t.summary, "overheads": t.overheads,
-           "amortised": t.amortised, "latency": t.latency, "reproduction": t.t3, "breakdown": t.breakdown}
+           "amortised": t.amortised, "latency": t.latency, "reproduction": t.t3, "breakdown": t.breakdown,
+           "s4_extrapolated": t.extrapolated, "s4_fits": t.fits}
     if t.session is not None:
         out["session_totals"] = t.session
     if t.emulation is not None:
@@ -226,7 +231,7 @@ def _style() -> None:
 
 def _db_axis(ax, sizes) -> None:
     ax.set_xscale("log", base=2)
-    ax.set_xticks(sorted(sizes), [fmt_size(int(s)) for s in sorted(sizes)])
+    ax.set_xticks(sorted(sizes), [fmt_size(int(s)) for s in sorted(sizes)], rotation=40, ha="right")
     ax.minorticks_off()
 
 
@@ -349,12 +354,22 @@ def f3_absolute(t: Tables) -> plt.Figure:
             a = shown[shown.arm == arm].dropna(subset=[metric]).sort_values("db_bytes")
             if not a.empty:
                 _arm_line(ax, arm, a.db_bytes, a[metric])
-        _db_axis(ax, shown.db_bytes.unique())
+        sizes = set(shown.db_bytes)
+        ext = t.extrapolated
+        if not ext.empty and metric in ext:
+            last = shown[(shown.arm == extrapolate.ARM) & shown.db_bytes.isin(extrapolate.FIT_SIZES)]
+            last = last.dropna(subset=[metric]).sort_values("db_bytes").tail(1)
+            x = list(last.db_bytes) + list(ext.db_bytes)
+            y = list(last[metric]) + list(ext[metric])
+            ax.plot(x, y, color=COLOR[extrapolate.ARM], linestyle=":", marker="o", markersize=5,
+                    markerfacecolor=SURFACE, label=f"{extrapolate.ARM} extrapolated (decision 10)")
+            sizes |= set(ext.db_bytes)
+        _db_axis(ax, sorted(sizes))
         ax.set_yscale("log")
         ax.set_title(label, loc="left")
         ax.set_xlabel("database size")
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=8, bbox_to_anchor=(0.5, 0.93))
+    fig.legend(handles, labels, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 0.95))
     fig.suptitle("F3  Absolute cost against database size, 1 KiB records (S3 and S4 retrieve one bit)",
                  x=0.02, ha="left", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.86))
