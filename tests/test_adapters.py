@@ -179,15 +179,15 @@ def run(tmp_path_factory):
 
     def _run(arm: Arm, *, record_bytes: int, phase: str = "all", reps: int = REPS,
              warmup: int = WARMUP, fault: str = "none", env: dict | None = None,
-             arm_name: str | None = None) -> Result:
-        key = (arm.name, arm_name, record_bytes, phase, reps, warmup, fault,
+             arm_name: str | None = None, db_bytes: int = DB_BYTES) -> Result:
+        key = (arm.name, arm_name, db_bytes, record_bytes, phase, reps, warmup, fault,
                tuple(sorted((env or {}).items())))
         if key in cache:
             return cache[key]
         binary = _binary(arm)
         out = tmp_path_factory.mktemp("adapter") / "out.jsonl"
         argv = (
-            str(binary), "--arm", arm_name or arm.name, "--db-bytes", str(DB_BYTES),
+            str(binary), "--arm", arm_name or arm.name, "--db-bytes", str(db_bytes),
             "--record-bytes", str(record_bytes), "--phase", phase, "--reps", str(reps),
             "--warmup", str(warmup), "--seed", str(SEED), "--fault", fault, "--out", str(out),
         )
@@ -352,6 +352,16 @@ def test_usage_errors(arm, run):
     if arm.record_sizes == (0,):
         r = run(arm, record_bytes=32, reps=1, warmup=0)
         assert r.returncode == 2, f"--record-bytes 32 exited {r.returncode}, expected 2"
+
+
+@pytest.mark.parametrize("arm, record_bytes", [("S3", 0), ("M1", 32)])
+def test_offline_repetitions_release_the_previous_state(arm, record_bytes, run):
+    """Each offline repetition builds the arm's whole state again. If the previous repetition's state is
+    still live while it does, the peak climbs with every repetition, and at 128 MiB and 1 GiB the cell
+    runs out of memory (decision 26). At 16 MiB that growth is tens of MiB or more, well above noise."""
+    r = run(BY_NAME[arm], record_bytes=record_bytes, phase="offline", reps=3, warmup=0, db_bytes=16 << 20)
+    peaks = [x["metrics"]["process_peak_rss_bytes"] for x in r.ok()]
+    assert peaks[-1] - peaks[0] < 8 << 20, [p >> 20 for p in peaks]
 
 
 def test_s0go_one_bit_anchor(run):

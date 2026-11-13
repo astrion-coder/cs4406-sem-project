@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"runtime/debug"
 
 	"github.com/si-co/vpir-code/lib/client"
 	"github.com/si-co/vpir-code/lib/database"
@@ -59,6 +60,10 @@ func (c *xorCell) analytical() Analytical { return Analytical{} }
 func (c *xorCell) setup() offlineCost {
 	var cost offlineCost
 	if c.merkle {
+		// Release the previous repetition's tree, servers and clients first, or
+		// they stay live while this repetition builds its own.
+		c.db, c.srv, c.cli, c.other = nil, [2]*server.PIR{}, nil, nil
+		debug.FreeOSMemory()
 		cost.serverPreproc = timed(func() {
 			c.db = database.CreateRandomMerkle(bytes.NewReader(c.data), c.g.dbBits, c.g.rows, c.g.recordBytes)
 		})

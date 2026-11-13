@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"runtime/debug"
 
 	"github.com/si-co/vpir-code/lib/client"
 	"github.com/si-co/vpir-code/lib/database"
@@ -87,6 +88,10 @@ func (c *lwePlusCell) analytical() Analytical {
 }
 
 func (c *lwePlusCell) setup() offlineCost {
+	// Release the previous repetition's digest, server and client first, or
+	// they stay live while this repetition builds its own.
+	c.db.Auth, c.srv, c.cli = nil, nil, nil
+	debug.FreeOSMemory()
 	var digest *matrix.Matrix
 	pre := timed(func() { digest = database.Digest(c.db, c.p.L) })
 	c.db.Auth = &database.Auth{DigestLWE: digest}
