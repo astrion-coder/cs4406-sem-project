@@ -2,7 +2,7 @@
 # Cells come from the focus tier in grid.yaml, narrowed by `cells`. The corpus is replayed round-robin
 # (docs/serve_protocol.md).
 
-cells:  # decision 25: the RQ4 cell only; at 1 GiB S1, S2 and S3 do not fit in memory
+cells:  # decision 25: the RQ4 cell only, the one size where every arm fits (at 1 GiB S2 and S3 do not)
   db_bytes: ["128MiB"]
   record_bytes: ["1KiB", "1bit"]
 

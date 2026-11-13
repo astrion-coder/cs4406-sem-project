@@ -118,7 +118,7 @@ Also run the paper-native configurations as RQ1 anchors (decision 21). SimplePIR
 
 ### 5.1 Extension sub-grids (RQ3b, RQ4, RQ6, RQ7)
 
-The extensions run only on **focus cells**, to keep runtime bounded: DB ∈ {128 MiB, 1 GiB} × record ∈ {32 B, 1 KiB}, all 8 arms where they run. **[HUMAN]** May shrink this to 1 GiB × 1 KiB if time is short. The humans shrank RQ4 (the same-day plan in `notebooks/10_rq4_day.ipynb`) and RQ6 and RQ7 (decision 25) to 128 MiB × 1 KiB instead, since S1, S2 and S3 do not fit in memory at 1 GiB.
+The extensions run only on **focus cells**, to keep runtime bounded: DB ∈ {128 MiB, 1 GiB} × record ∈ {32 B, 1 KiB}, all 8 arms where they run. **[HUMAN]** May shrink this to 1 GiB × 1 KiB if time is short. The humans shrank RQ4 (the same-day plan in `notebooks/10_rq4_day.ipynb`) and RQ6 and RQ7 (decision 25) to 128 MiB × 1 KiB instead, since at 1 GiB S2 and S3 do not fit in memory and S1 fits only in its online phase.
 
 | Experiment | Axis | Values | Reps |
 |---|---|---|---|
