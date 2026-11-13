@@ -194,9 +194,10 @@ def test_platform_mismatch_is_refused():
 
 def test_comm_disagreement_is_a_warning_not_an_error():
     row = _base("S1", "online")
+    before = check_row(row)
     row["analytical"]["down_bytes"] = row["metrics"]["down_bytes"] * 1.5
-    probs = check_row(row)
-    assert [p.severity for p in probs] == ["warning"]
+    added = [p for p in check_row(row) if p not in before]
+    assert [(p.field, p.severity) for p in added] == [("metrics/down_bytes", "warning")]
 
 
 def test_padding_over_limit_warns():
