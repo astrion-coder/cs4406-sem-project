@@ -1065,7 +1065,8 @@
   "warmup": 1,
   "seed": 1234,
   "timeout_s": 7200.0,
-  "binary": "vsp-adapter"
+  "binary": "vsp-adapter",
+  "offline_in_process": true
  },
  {
   "cell_id": "S1_1GiB_32B_online",
@@ -1089,7 +1090,8 @@
   "warmup": 1,
   "seed": 1234,
   "timeout_s": 7200.0,
-  "binary": "vsp-adapter"
+  "binary": "vsp-adapter",
+  "offline_in_process": true
  },
  {
   "cell_id": "S1_1GiB_256B_online",
@@ -1113,7 +1115,8 @@
   "warmup": 1,
   "seed": 1234,
   "timeout_s": 7200.0,
-  "binary": "vsp-adapter"
+  "binary": "vsp-adapter",
+  "offline_in_process": true
  },
  {
   "cell_id": "S1_1GiB_1KiB_online",
@@ -1137,7 +1140,8 @@
   "warmup": 1,
   "seed": 1234,
   "timeout_s": 7200.0,
-  "binary": "vsp-adapter"
+  "binary": "vsp-adapter",
+  "offline_in_process": true
  },
  {
   "cell_id": "S1_1GiB_8KiB_online",
