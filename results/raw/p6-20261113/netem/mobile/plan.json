@@ -1,0 +1,86 @@
+[
+ {
+  "cell_id": "S0-go_128MiB_1KiB_online",
+  "arm": "S0-go",
+  "db_bytes": 134217728,
+  "record_bytes": 1024,
+  "phase": "online",
+  "reps": 30,
+  "warmup": 0,
+  "seed": 1234,
+  "timeout_s": 3600.0,
+  "binary": "simplepir-adapter"
+ },
+ {
+  "cell_id": "S0-cpp_128MiB_1KiB_online",
+  "arm": "S0-cpp",
+  "db_bytes": 134217728,
+  "record_bytes": 1024,
+  "phase": "online",
+  "reps": 30,
+  "warmup": 0,
+  "seed": 1234,
+  "timeout_s": 3600.0,
+  "binary": "vsp-adapter"
+ },
+ {
+  "cell_id": "S1_128MiB_1KiB_online",
+  "arm": "S1",
+  "db_bytes": 134217728,
+  "record_bytes": 1024,
+  "phase": "online",
+  "reps": 30,
+  "warmup": 0,
+  "seed": 1234,
+  "timeout_s": 3600.0,
+  "binary": "vsp-adapter"
+ },
+ {
+  "cell_id": "S2_128MiB_1KiB_online",
+  "arm": "S2",
+  "db_bytes": 134217728,
+  "record_bytes": 1024,
+  "phase": "online",
+  "reps": 30,
+  "warmup": 0,
+  "seed": 1234,
+  "timeout_s": 3600.0,
+  "binary": "vsp-adapter"
+ },
+ {
+  "cell_id": "M0_128MiB_1KiB_online",
+  "arm": "M0",
+  "db_bytes": 134217728,
+  "record_bytes": 1024,
+  "phase": "online",
+  "reps": 30,
+  "warmup": 0,
+  "seed": 1234,
+  "timeout_s": 3600.0,
+  "binary": "apir-adapter"
+ },
+ {
+  "cell_id": "M1_128MiB_1KiB_online",
+  "arm": "M1",
+  "db_bytes": 134217728,
+  "record_bytes": 1024,
+  "phase": "online",
+  "reps": 30,
+  "warmup": 0,
+  "seed": 1234,
+  "timeout_s": 3600.0,
+  "binary": "apir-adapter"
+ },
+ {
+  "cell_id": "S3_128MiB_1bit_online",
+  "arm": "S3",
+  "db_bytes": 134217728,
+  "record_bytes": null,
+  "phase": "online",
+  "reps": 30,
+  "warmup": 0,
+  "seed": 1234,
+  "timeout_s": 3600.0,
+  "binary": "apir-adapter"
+ }
+]

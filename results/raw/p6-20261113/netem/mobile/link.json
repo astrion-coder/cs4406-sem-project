@@ -1,0 +1,22 @@
+[
+ {
+  "at": "2026-11-13T16:30:22.902173+00:00",
+  "profile": "mobile",
+  "state": {
+   "pf_token": "5200987819311494435",
+   "profile": "mobile",
+   "down_mbps": "10",
+   "up_mbps": "5",
+   "rtt_ms": "60",
+   "delay_ms": "30",
+   "ports": "47001 47002",
+   "up_at": "2026-11-13T16:28:46Z",
+   "calibrated": "pass",
+   "rtt_checked": "no",
+   "calib_rtt_ms": "63.732",
+   "calib_down_mbps": "10.7",
+   "calib_up_mbps": "4.92",
+   "calibrated_at": "2026-11-13T16:29:37Z"
+  }
+ }
+]

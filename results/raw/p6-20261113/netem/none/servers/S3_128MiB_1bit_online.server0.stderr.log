@@ -1,0 +1,3 @@
+apir-adapter: S3: laying out 134217728-byte database (seed 1234)
+apir-adapter: S3: offline phase
+vpir-serve ready 127.0.0.1:57442

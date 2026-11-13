@@ -1,0 +1,114 @@
+{
+ "targets": [
+  {
+   "cell_id": "S0-go_128MiB_1KiB",
+   "arm": "S0-go",
+   "db_bytes": 134217728,
+   "record_bytes": 1024,
+   "seed": 1234,
+   "binary": "simplepir-adapter",
+   "timeout_s": 3600.0
+  },
+  {
+   "cell_id": "S0-cpp_128MiB_1KiB",
+   "arm": "S0-cpp",
+   "db_bytes": 134217728,
+   "record_bytes": 1024,
+   "seed": 1234,
+   "binary": "vsp-adapter",
+   "timeout_s": 3600.0
+  },
+  {
+   "cell_id": "S1_128MiB_1KiB",
+   "arm": "S1",
+   "db_bytes": 134217728,
+   "record_bytes": 1024,
+   "seed": 1234,
+   "binary": "vsp-adapter",
+   "timeout_s": 3600.0
+  },
+  {
+   "cell_id": "S2_128MiB_1KiB",
+   "arm": "S2",
+   "db_bytes": 134217728,
+   "record_bytes": 1024,
+   "seed": 1234,
+   "binary": "vsp-adapter",
+   "timeout_s": 3600.0
+  },
+  {
+   "cell_id": "M0_128MiB_1KiB",
+   "arm": "M0",
+   "db_bytes": 134217728,
+   "record_bytes": 1024,
+   "seed": 1234,
+   "binary": "apir-adapter",
+   "timeout_s": 3600.0
+  },
+  {
+   "cell_id": "M1_128MiB_1KiB",
+   "arm": "M1",
+   "db_bytes": 134217728,
+   "record_bytes": 1024,
+   "seed": 1234,
+   "binary": "apir-adapter",
+   "timeout_s": 3600.0
+  },
+  {
+   "cell_id": "S3_128MiB_1bit",
+   "arm": "S3",
+   "db_bytes": 134217728,
+   "record_bytes": null,
+   "seed": 1234,
+   "binary": "apir-adapter",
+   "timeout_s": 3600.0
+  }
+ ],
+ "load": {
+  "cells": {
+   "db_bytes": [
+    "128MiB"
+   ],
+   "record_bytes": [
+    "1KiB",
+    "1bit"
+   ]
+  },
+  "corpus_queries": 64,
+  "warmup_s": 5,
+  "window_s": 30,
+  "runs": 3,
+  "closed_loop": {
+   "clients": [
+    1,
+    4,
+    16,
+    64
+   ],
+   "stop_when_p95_over": 10,
+   "workers": 6
+  },
+  "open_loop": {
+   "offered_load_fraction": [
+    0.25,
+    0.5,
+    0.75,
+    0.9,
+    1.1
+   ],
+   "arrivals": "poisson",
+   "workers": 6
+  },
+  "multicore": {
+   "workers": [
+    6,
+    4,
+    2,
+    1
+   ],
+   "clients": 16,
+   "reps": 3
+  },
+  "loadgen_cpu_limit_pct": 70
+ }
+}

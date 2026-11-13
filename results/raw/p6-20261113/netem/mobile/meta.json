@@ -1,0 +1,11 @@
+{
+ "run_id": "p6-20261113",
+ "tier": "rq3",
+ "experiment": "RQ3b",
+ "profile": "mobile",
+ "queries": 30,
+ "workers": 1,
+ "git_sha_harness": "035ddc7a8d7d8a7a2e82828a8df696efa25903b1",
+ "platform": "arm64-darwin-Apple M1 Pro",
+ "started": "2026-11-13T16:30:22.901500+00:00"
+}

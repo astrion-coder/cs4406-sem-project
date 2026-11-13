@@ -25,3 +25,13 @@ results/processed/
 results/figures/
 # The grid runner's lock; a finished or killed run leaves it behind
 results/raw/**/runner.pid
+
+# Latex Artifacts
+*.aux
+*.fdb_latexmk
+*.fls
+report.log
+*.out
+*.synctex.gz
+# Load-generator query corpora: rebuilt by make concurrency, and S3's passes GitHub's 100 MB limit
+results/raw/**/loadgen/corpus/*.bin

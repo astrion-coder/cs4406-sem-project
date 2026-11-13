@@ -1,0 +1,22 @@
+[
+ {
+  "at": "2026-11-13T12:12:26.990478+00:00",
+  "profile": "broadband",
+  "state": {
+   "pf_token": "5200987819311494435",
+   "profile": "broadband",
+   "down_mbps": "100",
+   "up_mbps": "20",
+   "rtt_ms": "20",
+   "delay_ms": "10",
+   "ports": "47001 47002",
+   "up_at": "2026-11-13T12:00:42Z",
+   "calibrated": "pass",
+   "rtt_checked": "no",
+   "calib_rtt_ms": "23.545",
+   "calib_down_mbps": "99.6",
+   "calib_up_mbps": "19.6",
+   "calibrated_at": "2026-11-13T12:11:26Z"
+  }
+ }
+]

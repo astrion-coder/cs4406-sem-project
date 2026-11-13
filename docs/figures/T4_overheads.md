@@ -114,6 +114,22 @@
 | S1/S0-cpp | price | 128MiB | 8KiB | offline | client_storage_bytes | 1.011 | [1.01, 1.01] | 5 | True |
 | S1/S0-cpp | price | 128MiB | 8KiB | offline | server_offline_s | 3.922 | [3.92, 3.93] | 5 | True |
 | S1/S0-cpp | price | 128MiB | 8KiB | offline | client_offline_s |  |  | 5 | True |
+| S1/S0-cpp | price | 1GiB | 32B | offline | offline_bytes | 2.264 | [2.26, 2.26] | 3 | False |
+| S1/S0-cpp | price | 1GiB | 32B | offline | client_storage_bytes | 1.011 | [1.01, 1.01] | 3 | False |
+| S1/S0-cpp | price | 1GiB | 32B | offline | server_offline_s | 3.995 | [3.89, 4.01] | 3 | False |
+| S1/S0-cpp | price | 1GiB | 32B | offline | client_offline_s |  |  | 3 | False |
+| S1/S0-cpp | price | 1GiB | 256B | offline | offline_bytes | 2.264 | [2.26, 2.26] | 3 | False |
+| S1/S0-cpp | price | 1GiB | 256B | offline | client_storage_bytes | 1.011 | [1.01, 1.01] | 3 | False |
+| S1/S0-cpp | price | 1GiB | 256B | offline | server_offline_s | 4.08 | [4.02, 4.1] | 3 | False |
+| S1/S0-cpp | price | 1GiB | 256B | offline | client_offline_s |  |  | 3 | False |
+| S1/S0-cpp | price | 1GiB | 1KiB | offline | offline_bytes | 2.264 | [2.26, 2.26] | 3 | False |
+| S1/S0-cpp | price | 1GiB | 1KiB | offline | client_storage_bytes | 1.011 | [1.01, 1.01] | 3 | False |
+| S1/S0-cpp | price | 1GiB | 1KiB | offline | server_offline_s | 4.104 | [4.08, 4.11] | 3 | False |
+| S1/S0-cpp | price | 1GiB | 1KiB | offline | client_offline_s |  |  | 3 | False |
+| S1/S0-cpp | price | 1GiB | 8KiB | offline | offline_bytes | 2.264 | [2.26, 2.26] | 3 | False |
+| S1/S0-cpp | price | 1GiB | 8KiB | offline | client_storage_bytes | 1.011 | [1.01, 1.01] | 3 | False |
+| S1/S0-cpp | price | 1GiB | 8KiB | offline | server_offline_s | 3.945 | [3.9, 3.97] | 3 | False |
+| S1/S0-cpp | price | 1GiB | 8KiB | offline | client_offline_s |  |  | 3 | False |
 | S2/S0-cpp | price | 1MiB | 32B | online | online_bytes | 1.228 | [1.23, 1.23] | 30 | False |
 | S2/S0-cpp | price | 1MiB | 32B | online | server_online_s | 1.614 | [1.58, 1.72] | 30 | False |
 | S2/S0-cpp | price | 1MiB | 32B | online | client_online_s | 1.297 | [1.28, 1.31] | 30 | False |
@@ -298,6 +314,10 @@
 | M1/M0 | price | 16MiB | 8KiB | offline | client_storage_bytes |  |  | 5 | False |
 | M1/M0 | price | 16MiB | 8KiB | offline | server_offline_s |  |  | 5 | False |
 | M1/M0 | price | 16MiB | 8KiB | offline | client_offline_s | 2.893 | [2.04, 3.75] | 5 | False |
+| M1/M0 | price | 128MiB | 32B | offline | offline_bytes |  |  | 5 | False |
+| M1/M0 | price | 128MiB | 32B | offline | client_storage_bytes |  |  | 5 | False |
+| M1/M0 | price | 128MiB | 32B | offline | server_offline_s |  |  | 5 | False |
+| M1/M0 | price | 128MiB | 32B | offline | client_offline_s | 4.112 | [2.27, 4.45] | 5 | False |
 | M1/M0 | price | 128MiB | 256B | offline | offline_bytes |  |  | 5 | False |
 | M1/M0 | price | 128MiB | 256B | offline | client_storage_bytes |  |  | 5 | False |
 | M1/M0 | price | 128MiB | 256B | offline | server_offline_s |  |  | 5 | False |
