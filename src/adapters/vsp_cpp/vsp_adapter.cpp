@@ -135,6 +135,7 @@ constexpr FlagSpec kFlags[] = {
     {"--fault-prob", true, kBench, 0},
     {"--recovery", true, kBench, 0},
     {"--replicas-cheat", false, kBench, 0},
+    {"--offline-in-process", false, kBench, 0},
     {"--workers", true, kServe, kServe},
     {"--listen", true, kServe, kServe},
     {"--server-id", true, kServe, 0},
@@ -156,6 +157,7 @@ struct Options {
     double fault_prob = 0.0;
     const PolicySpec* recovery = &kPolicies[0];
     bool replicas_cheat = false;
+    bool offline_in_process = false;
     std::string out;
     uint64_t workers = 0;                 // serve
     std::optional<wire::Endpoint> listen;  // serve
@@ -169,7 +171,7 @@ constexpr const char* kUsage =
     "                   --fault none|flip_answer_bit|wrong_record|flip_hint_bit|\n"
     "                           stale_record|drop_server|bad_proof\n"
     "                   [--fault-prob F] [--recovery abort|switch_replica|re_preprocess]\n"
-    "                   [--replicas-cheat] --out PATH.jsonl\n"
+    "                   [--replicas-cheat] [--offline-in-process] --out PATH.jsonl\n"
     "       vsp-adapter --mode serve --arm ARM --db-bytes N --record-bytes N --seed N\n"
     "                   --workers W --listen HOST:PORT [--server-id 0] [--out PATH.jsonl]\n"
     "       vsp-adapter --mode client --arm ARM --db-bytes N --record-bytes N --seed N\n"
@@ -273,6 +275,8 @@ Options parse_args(int argc, char** argv) {
                                  "' (retry_same is never allowed)");
         } else if (flag == "--replicas-cheat") {
             o.replicas_cheat = true;
+        } else if (flag == "--offline-in-process") {
+            o.offline_in_process = true;
         } else if (flag == "--out") {
             o.out = v;
         } else if (flag == "--workers") {
@@ -302,6 +306,9 @@ Options parse_args(int argc, char** argv) {
         throw UsageError(std::string(o.arm->name) + " does not support --fault " + o.fault->name);
     if (o.recovery->kind != Policy::Abort && !o.arm->verifiable())
         throw UsageError(std::string(o.arm->name) + " never rejects an answer, so it supports only --recovery abort");
+    if (o.offline_in_process && o.fault->kind != kNone)
+        throw UsageError("--offline-in-process takes --fault none: a faulted offline phase can end in an upstream "
+                         "assert, which only a child may hit");
     if (o.fault->kind == kWrongRecord && o.db_bytes / o.record_bytes < 2)
         throw UsageError("wrong_record needs at least two records");
     if (!have_prob) o.fault_prob = o.fault->kind == kNone ? 0.0 : 1.0;
@@ -898,16 +905,20 @@ OfflineResult run_offline(const VeriSimplePIR& pir, const ArmSpec& arm, const Se
     return out;
 }
 
-// A timed offline repetition, run in a forked child. Each S1/S2 offline phase leaks tens of
-// MB inside the library (multilimb_lhe.cpp:14-17; Matrix has no destructor), and the leak
-// dies with the child. The peak RSS is the child's.
+// A timed offline repetition in this process, with this process's peak RSS. Each S1/S2
+// offline phase leaks tens of MB inside the library (multilimb_lhe.cpp:14-17; Matrix has no
+// destructor), so repetitions here accumulate it.
+OfflineMetrics run_offline_here(const VeriSimplePIR& pir, const ArmSpec& arm, const ServerDB& db,
+                                std::optional<OfflineFlip> flip) {
+    OfflineMetrics r = run_offline(pir, arm, db, flip).metrics;
+    r.peak_rss_bytes = peak_rss_bytes();
+    return r;
+}
+
+// The same repetition in a forked child, so the leak dies with it. The peak RSS is the child's.
 OfflineMetrics run_offline_isolated(const VeriSimplePIR& pir, const ArmSpec& arm, const ServerDB& db,
                                     std::optional<OfflineFlip> flip) {
-    auto [m, output] = run_isolated_value<OfflineMetrics>([&] {
-        OfflineMetrics r = run_offline(pir, arm, db, flip).metrics;
-        r.peak_rss_bytes = peak_rss_bytes();
-        return r;
-    });
+    auto [m, output] = run_isolated_value<OfflineMetrics>([&] { return run_offline_here(pir, arm, db, flip); });
     if (!m) throw std::runtime_error("offline repetition aborted: " + output);
     return *m;
 }
@@ -1186,6 +1197,7 @@ Json scheme_params(const ArmSpec& arm, const Options& o, const std::optional<Lay
         {"allow_trivial", Json::boolean(kAllowTrivial)},
         {"stat_sec_param", arm.verifiable() ? Json::integer(STAT_SEC_PARAM) : Json::null()},
         {"answer_kernel", Json::string(kAnswerKernel)},
+        {"offline_in_process", Json::boolean(o.offline_in_process)},
     };
     if (pir) {
         const PlaintextDBParams& p = pir->dbParams;
@@ -1361,7 +1373,8 @@ int run_bench(const Options& o, const Layout& l, Sink& sink) {
             r.faulted = draw_faulted(o, Phase::Offline, fault_stream);
             const std::optional<OfflineFlip> flip =
                 r.faulted ? std::optional(offline_flip(*pir, o.fault->kind, fault_stream)) : std::nullopt;
-            const OfflineMetrics m = run_offline_isolated(*pir, arm, db, flip);
+            const OfflineMetrics m = o.offline_in_process ? run_offline_here(*pir, arm, db, flip)
+                                                          : run_offline_isolated(*pir, arm, db, flip);
             r.metrics = metrics(Phase::Offline, &m, nullptr, nullptr);
             r.analytical = sizes;
             r.detected = m.detected;

@@ -19,6 +19,8 @@ ARMS = ("S0-go", "S0-cpp", "S1", "S2", "S3", "S4", "M0", "M1")
 ONE_BIT_ARMS = frozenset({"S3", "S4"})
 # S0-go also retrieves one bit, but only as the SimplePIR README anchor (decision 21).
 ONE_BIT_CAPABLE = ONE_BIT_ARMS | {"S0-go"}
+# vsp-adapter's arms, the only ones whose offline repetitions can leave the forked child (decision 27).
+IN_PROCESS_CAPABLE = frozenset({"S0-cpp", "S1", "S2"})
 PHASES = ("offline", "online")
 UNITS = {"B": 1, "KiB": 1 << 10, "MiB": 1 << 20, "GiB": 1 << 30}
 _SIZE = re.compile(r"^\s*(\d+)\s*(B|KiB|MiB|GiB)\s*$")
@@ -59,6 +61,7 @@ class Cell:
     seed: int
     timeout_s: float
     binary: str
+    offline_in_process: bool = False
 
     @property
     def cell_id(self) -> str:
@@ -94,13 +97,17 @@ class Cell:
             "--fault", "none",
             "--recovery", "abort",
             "--out", str(out),
-        ]
+        ] + (["--offline-in-process"] if self.offline_in_process else [])
 
     def to_dict(self) -> dict:
-        return {"cell_id": self.cell_id, "arm": self.arm, "db_bytes": self.db_bytes,
-                "record_bytes": self.record_bytes, "phase": self.phase, "reps": self.reps,
-                "warmup": self.warmup, "seed": self.seed, "timeout_s": self.timeout_s,
-                "binary": self.binary}
+        d = {"cell_id": self.cell_id, "arm": self.arm, "db_bytes": self.db_bytes,
+             "record_bytes": self.record_bytes, "phase": self.phase, "reps": self.reps,
+             "warmup": self.warmup, "seed": self.seed, "timeout_s": self.timeout_s,
+             "binary": self.binary}
+        # Only flagged cells carry the key, so plans written before decision 27 still match on resume.
+        if self.offline_in_process:
+            d["offline_in_process"] = True
+        return d
 
 
 def _by_size(table: dict | int | float, db_bytes: int) -> float:
@@ -128,9 +135,15 @@ def expand(grid: dict, tier: str) -> list[Cell]:
         table = grid["timeout_s"].get(arm, grid["timeout_s"]["default"])
         return float(_by_size(table, db))
 
+    in_process = {arm: set(map(parse_size, sizes)) for arm, sizes in (grid.get("offline_in_process") or {}).items()}
+    if set(in_process) - IN_PROCESS_CAPABLE:
+        raise ValueError(f"offline_in_process lists {sorted(set(in_process) - IN_PROCESS_CAPABLE)};"
+                         f" only {sorted(IN_PROCESS_CAPABLE)} can run it")
+
     def cell(arm: str, db: int, rec: int | None, phase: str) -> Cell:
         n = reps["online"] if phase == "online" else _by_size(reps["offline"], db)
-        return Cell(arm, db, rec, phase, int(n), warmup, seed, timeout(arm, db), grid["adapters"][arm])
+        return Cell(arm, db, rec, phase, int(n), warmup, seed, timeout(arm, db), grid["adapters"][arm],
+                    phase == "offline" and db in in_process.get(arm, set()))
 
     cells = []
     sweep = t.get("sweep", {})

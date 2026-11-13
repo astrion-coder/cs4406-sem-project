@@ -12,6 +12,13 @@ timeout_s:
   S4: 2700  # decision 10: 45 minutes per S4 cell
 mem_cap_gib: 14  # the reference Mac has 16 GiB; memcap.py kills a run whose footprint passes this
 
+# Decision 27: these cells run their VeriSimplePIR offline repetitions in the adapter's own process
+# (vsp-adapter --offline-in-process). Elsewhere a forked child runs each one, so the library's leak
+# dies with it, but macOS charges the child's pages on top of the parent's, and at 1 GiB S1 then
+# passes the cap. In one process the leak accumulates across the cell's repetitions instead.
+offline_in_process:
+  S1: ["1GiB"]
+
 adapters:  # binary in build/adapters/ for each arm (src/adapters/README.md)
   S0-go: simplepir-adapter
   S0-cpp: vsp-adapter

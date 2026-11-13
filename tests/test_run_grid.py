@@ -38,6 +38,21 @@ def test_spec_repetitions_and_caps():
     assert {c.db_bytes for c in cells.values() if c.arm == "S3"} == {1 << 20, 16 << 20, 128 << 20, 1 << 30}
 
 
+def test_only_s1_1gib_offline_runs_in_process():
+    """Decision 27: S1's 1 GiB offline cells pass --offline-in-process, and no other cell's plan entry changes."""
+    cells = gridmod.expand(gridmod.load(), "tier1")
+    flagged = {c.cell_id for c in cells if "--offline-in-process" in c.adapter_args(Path("o.jsonl"))}
+    assert flagged == {f"S1_1GiB_{r}_offline" for r in ("32B", "256B", "1KiB", "8KiB")}
+    assert {c.cell_id for c in cells if "offline_in_process" in c.to_dict()} == flagged
+
+
+def test_offline_in_process_refuses_arms_outside_vsp_adapter():
+    grid = gridmod.load()
+    grid["offline_in_process"] = {"M1": ["1GiB"]}
+    with pytest.raises(ValueError, match="M1"):
+        gridmod.expand(grid, "tier1")
+
+
 def test_one_bit_cells_send_record_bytes_zero():
     c = next(c for c in gridmod.expand(gridmod.load(), "smoke") if c.arm == "S3")
     args = c.adapter_args(Path("o.jsonl"))

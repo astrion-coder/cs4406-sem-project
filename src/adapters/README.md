@@ -30,6 +30,7 @@ Each adapter is a command-line program that drives one upstream library and writ
 - `--fault` is one of the kinds in the fault table below. `--fault-prob` (default 1.0 when `--fault` is not `none`) is the chance that each repetition is faulted, drawn from the seeded generator.
 - `--recovery` is `abort`, `switch_replica` or `re_preprocess` (see "Recovery"). `retry_same` is never allowed (decision 12).
 - `--replicas-cheat` makes every replica that `switch_replica` turns to faulty in the same way as the first server. Without it, replicas are honest (spec §6.1).
+- `--offline-in-process` (vsp-adapter only, decision 27) runs the offline repetitions in the adapter's own process instead of a forked child. It takes `--fault none` only.
 - Bench mode is single-threaded. Go adapters call `runtime.GOMAXPROCS(1)`.
 
 Exit codes:

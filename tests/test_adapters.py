@@ -179,8 +179,8 @@ def run(tmp_path_factory):
 
     def _run(arm: Arm, *, record_bytes: int, phase: str = "all", reps: int = REPS,
              warmup: int = WARMUP, fault: str = "none", env: dict | None = None,
-             arm_name: str | None = None, db_bytes: int = DB_BYTES) -> Result:
-        key = (arm.name, arm_name, db_bytes, record_bytes, phase, reps, warmup, fault,
+             arm_name: str | None = None, db_bytes: int = DB_BYTES, flags: tuple[str, ...] = ()) -> Result:
+        key = (arm.name, arm_name, db_bytes, record_bytes, phase, reps, warmup, fault, flags,
                tuple(sorted((env or {}).items())))
         if key in cache:
             return cache[key]
@@ -189,7 +189,7 @@ def run(tmp_path_factory):
         argv = (
             str(binary), "--arm", arm_name or arm.name, "--db-bytes", str(db_bytes),
             "--record-bytes", str(record_bytes), "--phase", phase, "--reps", str(reps),
-            "--warmup", str(warmup), "--seed", str(SEED), "--fault", fault, "--out", str(out),
+            "--warmup", str(warmup), "--seed", str(SEED), "--fault", fault, "--out", str(out), *flags,
         )
         child_env = {k: v for k, v in os.environ.items() if k not in HARNESS_ENV}
         child_env.update(env or {})
@@ -362,6 +362,20 @@ def test_offline_repetitions_release_the_previous_state(arm, record_bytes, run):
     r = run(BY_NAME[arm], record_bytes=record_bytes, phase="offline", reps=3, warmup=0, db_bytes=16 << 20)
     peaks = [x["metrics"]["process_peak_rss_bytes"] for x in r.ok()]
     assert peaks[-1] - peaks[0] < 8 << 20, [p >> 20 for p in peaks]
+
+
+@pytest.mark.parametrize("arm", ["S0-cpp", "S1", "S2"])
+def test_vsp_offline_in_process(arm, run):
+    """--offline-in-process runs honest offline repetitions in the adapter's own process, and every record
+    says which way it ran (decision 27). A faulted run refuses it: an upstream assert may end only a child."""
+    here = run(BY_NAME[arm], record_bytes=32, phase="offline", reps=2, warmup=0, flags=("--offline-in-process",))
+    assert [x["scheme_params"]["offline_in_process"] for x in here.ok()] == [True, True]
+    assert [str(p) for x in here.records for p in validate.check_row(x) if p.severity == "error"] == []
+    forked = run(BY_NAME[arm], record_bytes=32, phase="offline", reps=2, warmup=0)
+    assert [x["scheme_params"]["offline_in_process"] for x in forked.ok()] == [False, False]
+    faulted = run(BY_NAME[arm], record_bytes=32, phase="offline", reps=1, warmup=0, fault="flip_hint_bit",
+                  flags=("--offline-in-process",))
+    assert faulted.returncode == 2 and "--offline-in-process takes --fault none" in faulted.stderr, faulted.stderr[-500:]
 
 
 def test_s0go_one_bit_anchor(run):
