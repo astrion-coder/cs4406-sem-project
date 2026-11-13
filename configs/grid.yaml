@@ -68,6 +68,16 @@ tiers:
       S3: ["128MiB", "1GiB"]
       S4: []  # S4 does not run at the focus sizes (decision 10)
 
+  rq3:  # decision 28: RQ3a and RQ3b on the RQ4 cell only, the focus cells that fit in one evening
+    reps: *reps_full
+    sweep:
+      arms: [S0-go, S0-cpp, S1, S2, M0, M1]
+      db_bytes: ["128MiB"]
+      record_bytes: ["1KiB"]
+    one_bit:
+      S3: ["128MiB"]
+      S4: []
+
   anchors:  # RQ1 paper-native configurations the other tiers lack (spec 5, decision 21)
     reps: *reps_full
     one_bit:

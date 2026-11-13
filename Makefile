@@ -124,11 +124,14 @@ all: build sysinfo
 
 # RQ3b and RQ3a (task SG-6). Bring the link up first: sudo src/cs4406_sem_project/harness/dummynet.sh up <profile>
 # then calibrate it (gate G4). PROFILE=none runs the loopback baseline. RUN_ID groups every profile of one run.
+# RQ3_TIER picks the cells: rq3 (decision 28, the 128 MiB x 1 KiB cell) by default, focus for spec 5.1's set.
+RQ3_TIER ?= rq3
+
 netem: adapters
-	uv run python -m cs4406_sem_project.harness.netem --profile $(or $(PROFILE),$(error set PROFILE=lan|broadband|mobile|none)) --run-id $(or $(RUN_ID),$(error set RUN_ID=<p6 run id>))
+	uv run python -m cs4406_sem_project.harness.netem --tier $(RQ3_TIER) --profile $(or $(PROFILE),$(error set PROFILE=lan|broadband|mobile|none)) --run-id $(or $(RUN_ID),$(error set RUN_ID=<p6 run id>))
 
 session-check: adapters
-	uv run python -m cs4406_sem_project.harness.session_check --grid-run $(or $(GRID_RUN),$(error set GRID_RUN=<grid run id>)) --run-id $(or $(RUN_ID),$(error set RUN_ID=<p6 run id>))
+	uv run python -m cs4406_sem_project.harness.session_check --tier $(RQ3_TIER) --grid-run $(or $(GRID_RUN),$(error set GRID_RUN=<grid run id>)) --run-id $(or $(RUN_ID),$(error set RUN_ID=<p6 run id>))
 
 # RQ6 and RQ7 (task SG-7). The load generator uses only Go's standard library.
 LOADGEN := build/loadgen/loadgen

@@ -1,7 +1,8 @@
 """Render a short Markdown document to an A4 PDF and fail if it runs past --max-pages.
 
-Handles the subset our one-page reports use: #/##/### headings, paragraphs, "- " and "1. "
-lists, **bold**, `code` and [links](url). Pipe tables are rejected because they do not render. Uses only the standard library and
+Handles the subset our reports use: #/##/### headings, paragraphs, "- " and "1. "
+lists, **bold**, `code`, [links](url) and figures, a line of its own `![caption](image.png)` with the path
+relative to the Markdown file, drawn at the text width with the caption below. Pipe tables are rejected because they do not render. Uses only the standard library and
 macOS AppKit (through html2pdf.js), so it needs no installs.
 
     uv run python docs/tools/md2pdf.py docs/checkpoint.md docs/checkpoint.pdf --max-pages 1
@@ -25,7 +26,9 @@ h3 { font-size: 10.5px; margin: 4px 0 1px 0; }
 p { margin: 0 0 2px 0; }
 p.li { margin: 0 0 1px 10px; text-indent: -9px; }
 code { font-family: Menlo; font-size: 9.5px; }
+p.cap { font-size: 9px; margin: 0 0 6px 0; color: #52514e; }
 """
+TEXT_WIDTH = 487  # A4's 595 pt less html2pdf.js's two 54 pt margins
 
 
 def inline(text: str) -> str:
@@ -35,7 +38,7 @@ def inline(text: str) -> str:
     return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', out)
 
 
-def to_html(markdown: str) -> str:
+def to_html(markdown: str, base: Path) -> str:
     blocks: list[str] = []
     lines = markdown.splitlines()
     i = 0
@@ -46,6 +49,13 @@ def to_html(markdown: str) -> str:
         elif m := re.match(r"(#{1,3}) (.*)", line):
             level = len(m.group(1))
             blocks.append(f"<h{level}>{inline(m.group(2))}</h{level}>")
+            i += 1
+        elif m := re.fullmatch(r"!\[(.*)\]\((.+)\)", line.strip()):
+            image = (base / m.group(2)).resolve()
+            if not image.exists():
+                raise SystemExit(f"md2pdf: line {i + 1}: {image} does not exist")
+            blocks.append(f'<p><img src="{image.as_uri()}" width="{TEXT_WIDTH}"></p>')
+            blocks.append(f'<p class="cap">{inline(m.group(1))}</p>')
             i += 1
         elif line.startswith("|"):
             # AppKit imports the table but its print path lays every cell out on its own line.
@@ -59,7 +69,7 @@ def to_html(markdown: str) -> str:
                 i += 1
         else:
             para = []
-            while i < len(lines) and lines[i].strip() and not re.match(r"(#{1,3} |\||- |\d+\. )", lines[i]):
+            while i < len(lines) and lines[i].strip() and not re.match(r"(#{1,3} |\||- |\d+\. |!\[)", lines[i]):
                 para.append(lines[i].strip())
                 i += 1
             blocks.append(f"<p>{inline(' '.join(para))}</p>")
@@ -77,7 +87,7 @@ def main() -> int:
     p.add_argument("--max-pages", type=int)
     args = p.parse_args()
     with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False) as f:
-        f.write(to_html(args.markdown.read_text()))
+        f.write(to_html(args.markdown.read_text(), args.markdown.parent))
     script = Path(__file__).with_name("html2pdf.js")
     subprocess.run(["osascript", "-l", "JavaScript", str(script), f.name, str(args.pdf.resolve())], check=True)
     pages = page_count(args.pdf)

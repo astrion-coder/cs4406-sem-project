@@ -10,7 +10,7 @@ import psutil
 import pytest
 
 from cs4406_sem_project.harness import grid as gridmod
-from cs4406_sem_project.harness import netem, validate
+from cs4406_sem_project.harness import loadgen, netem, validate
 from cs4406_sem_project.harness.netem import LinkError, NetemRunner
 
 pytestmark = pytest.mark.usefixtures("on_ac_power")
@@ -137,6 +137,14 @@ def test_focus_cells_are_client_sessions():
     assert len(cells) == 6 * 2 * 2 + 2  # spec 5.1 focus cells; S3 at two sizes, S4 not at all
     assert all(c.phase == "online" and c.reps == 30 and c.warmup == 0 for c in cells)
     assert len({c.cell_id for c in cells}) == len(cells)
+
+
+def test_rq3_tier_is_the_rq4_cell():
+    """Decision 28: RQ3a and RQ3b run on the same cells as RQ6 and RQ7 (load.yaml's `cells`)."""
+    load = loadgen.yaml.safe_load(loadgen.LOAD_PATH.read_text())
+    rq67 = {(t.arm, t.db_bytes, t.record_bytes)
+            for t in loadgen.only_cells(loadgen.targets(gridmod.load(), "focus"), load["cells"])}
+    assert {(c.arm, c.db_bytes, c.record_bytes) for c in netem.netem_cells(gridmod.load(), "rq3", 30)} == rq67
 
 
 SMALL = {

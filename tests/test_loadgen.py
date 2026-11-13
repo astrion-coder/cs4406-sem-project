@@ -62,11 +62,11 @@ def test_load_yaml_runs_rq6_and_rq7_at_the_rq4_cell_only():
 
 def test_points_follow_load_yaml():
     load = loadgen.yaml.safe_load(loadgen.LOAD_PATH.read_text())
-    assert [p.clients for p in loadgen.closed_points(load)] == [1, 2, 4, 8, 16, 32, 64]
+    assert [p.clients for p in loadgen.closed_points(load)] == [1, 4, 16, 64]  # decision 28
     assert {p.workers for p in loadgen.closed_points(load)} == {6}
-    assert [p.name for p in loadgen.open_points(load)][:2] == ["open_w6_f0.10", "open_w6_f0.25"]
+    assert [p.name for p in loadgen.open_points(load)][:2] == ["open_w6_f0.25", "open_w6_f0.50"]
     assert [(p.workers, p.clients, p.runs) for p in loadgen.multicore_points(load)] == [
-        (1, 16, 3), (2, 16, 3), (4, 16, 3), (6, 16, 3)]  # decision 25
+        (6, 16, 3), (4, 16, 3), (2, 16, 3), (1, 16, 3)]  # decisions 25 and 28
     assert Point("multicore", 2, 30, clients=16).loop == "closed"
 
 

@@ -7,23 +7,25 @@ cells:  # decision 25: the RQ4 cell only, the one size where every arm fits (at 
   record_bytes: ["1KiB", "1bit"]
 
 corpus_queries: 64  # serve_protocol.md: no library caches between queries, so 64 suffices
-warmup_s: 10
-window_s: 60
+# decision 28 (13 November): 5 s warm-up and 30 s windows, down from 10 s and 60 s, so the run fits one evening
+warmup_s: 5
+window_s: 30
 runs: 3
 
 closed_loop:
-  clients: [1, 2, 4, 8, 16, 32, 64]
+  clients: [1, 4, 16, 64]  # decision 28: every other point of 1, 2, 4, ..., 64
   stop_when_p95_over: 10  # x the C = 1 p95 latency
   workers: 6  # the reference Mac's performance cores (spec 7)
 
 open_loop:
   # Fractions of the saturation throughput the closed loop measured for the same arm and cell.
-  offered_load_fraction: [0.10, 0.25, 0.50, 0.75, 0.90, 1.00, 1.10]
+  offered_load_fraction: [0.25, 0.50, 0.75, 0.90, 1.10]  # decision 28: 5 of the 7 levels
   arrivals: poisson
   workers: 6
 
 multicore:
-  workers: [1, 2, 4, 6]
+  # Descending, so W = 6 reuses the open loop's servers and each later W restarts them once.
+  workers: [6, 4, 2, 1]
   clients: 16  # enough queued queries to keep W = 6 workers busy (G6 ran 16 clients at W = 6)
   reps: 3  # decision 25: 3 load-generator runs per W, as RQ6 (spec 5.1 had 30)
 
