@@ -276,9 +276,10 @@ cmd_calibrate() {
 
     printf '%-10s %12s %12s %s\n' metric target measured "within ${TOLERANCE_PCT}%"
     local name target measured ok
-    # Decision 22: a delay dnctl cannot set (LAN's 0.25 ms each way) leaves the RTT recorded, not checked.
-    local rtt_checked=yes
-    [[ $DELAY_EXACT == yes ]] || rtt_checked=no
+    # Decisions 22 and 29: dummynet releases packets on the 10 ms kernel tick, so no profile's RTT is exact
+    # (broadband's whole-tick 10 ms each way measured 23.7 ms). The RTT is recorded, not checked, and F9
+    # models each link at its measured RTT. Bandwidth is still checked.
+    local rtt_checked=no
     while read -r name target measured; do
         if [[ $name == rtt_ms && $rtt_checked == no ]]; then ok="recorded only (decision 22)"
         elif within "$measured" "$target"; then ok=yes; else ok=no; verdict=fail; fi
