@@ -65,6 +65,28 @@ def test_load_runs_refuses_other_platforms(tmp_path):
         frame.load_runs([tmp_path], "arm64-darwin-Apple M1 Pro")
 
 
+def test_load_runs_leaves_out_the_rows_of_a_cell_that_timed_out(tmp_path):
+    timed_out = next(c for c in TIER1 if c.arm == "S3" and c.phase == "offline")
+    finished = next(c for c in TIER1 if c.arm == "S0-go" and c.phase == "online")
+    partial = synthetic.rows_for(timed_out)[:3]
+    failure = {
+        "run_id": "synthetic", "git_sha_harness": "abc1234", "platform": synthetic.PLATFORM,
+        "adapter": "apir_go", "arm": "S3", "cell_id": timed_out.cell_id, "db_bytes": timed_out.db_bytes,
+        "record_bytes": timed_out.record_bytes, "phase": "offline", "seed": 1, "fault": "none",
+        "fault_prob": 0.0, "recovery": "abort", "reps": timed_out.reps, "warmup": timed_out.warmup,
+        "status": "timeout", "error": "no exit within 7200 s", "partial_rows": len(partial),
+        "harness": {"exit_code": None, "wall_s": 7200.5, "peak_footprint_bytes": None,
+                    "timeout_s": 7200.0, "mem_cap_bytes": 14 << 30, "stderr_tail": ""},
+    }
+    _write(tmp_path / "run", {timed_out.cell_id: partial + [failure],
+                              finished.cell_id: synthetic.rows_for(finished)})
+    df, status = frame.load_runs([tmp_path / "run"], synthetic.PLATFORM)
+    assert set(df.arm) == {"S0-go"} and len(df) == finished.reps
+    assert status.to_dict("records") == [
+        {"arm": "S3", "db_bytes": timed_out.db_bytes, "record_bytes": 0, "phase": "offline",
+         "status": "timeout", "error": "no exit within 7200 s", "partial_rows": 3}]
+
+
 FOCUS = grid.expand(grid.load(), "focus")
 
 

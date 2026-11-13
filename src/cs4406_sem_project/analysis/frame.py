@@ -90,15 +90,24 @@ def run_files(run_dir: Path) -> list[Path]:
     return sorted(p for p in run_dir.glob("*.jsonl") if p.name != "ledger.jsonl")
 
 
+def _run_cell(r: dict) -> tuple:
+    return r["run_id"], r["arm"], r["db_bytes"], r["record_bytes"] or 0, r["phase"]
+
+
 def load_runs(run_dirs: Iterable[Path], reference_platform: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """The measurement table, and one row per cell that did not finish ok (status, error)."""
+    """The measurement table, and one row per cell that did not finish ok (status, error, partial_rows).
+    A cell that failed contributes only its status. The rows it wrote before the failure stay in the
+    raw file, but they are fewer than its repetitions and were measured under whatever made it fail."""
     rows = read_rows([p for d in run_dirs for p in run_files(d)], reference_platform)
+    failed = [r for r in rows if validate.kind(r) in ("adapter", "failure") and r["status"] != "ok"]
     status = pd.DataFrame([
         {"arm": r["arm"], "db_bytes": r["db_bytes"], "record_bytes": r["record_bytes"] or 0,
-         "phase": r["phase"], "status": r["status"], "error": r.get("error")}
-        for r in rows if validate.kind(r) in ("adapter", "failure") and r["status"] != "ok"
+         "phase": r["phase"], "status": r["status"], "error": r.get("error"),
+         "partial_rows": r.get("partial_rows")}
+        for r in failed
     ]).drop_duplicates()
-    return rows_to_frame(rows), status
+    unfinished = {_run_cell(r) for r in failed}
+    return rows_to_frame(r for r in rows if _run_cell(r) not in unfinished), status
 
 
 SESSION_COMPARISON = "comparison.json"
