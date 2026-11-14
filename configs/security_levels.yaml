@@ -1,0 +1,64 @@
+# Identifiers: RQ1-RQ7 and H1-H7 are defined in vpir_bench_spec.md section 2; P0-P10 (phases), G0-G7 (gates),
+# F1-F13 and T1-T4 in section 12; R1-R28 (reproduction targets) in docs/reproduction_targets.md; decisions in plan.md.
+# Security level per arm for table T2 (spec 12), read by analysis/plots.py. Every level is quoted from the source
+# named beside it: a paper in docs/papers/ (printed page, then the page in the PDF, which opens with a cover page),
+# or the pinned upstream code. The parameters each run used are in its rows' scheme_params, which T2 also prints.
+# The two-server arms (M0, M1) assume the servers do not collude; that is a different trust model, not a level.
+
+S0-go:
+  privacy: >-
+    LWE with n = 1024, log q = 32, sigma = 6.4, which SimplePIR's paper chooses for 128-bit security (that
+    paper is not in docs/papers, so the level was not checked against its PDF here)
+  integrity: "none"
+  source: >-
+    Henzinger et al., 'One Server for the Price of Two' (SimplePIR), USENIX Security 2023, parameter section
+    (eprint 2022/949, linked from third_party/simplepir/README.md; not in docs/papers). n, log q and sigma also in
+    this arm's scheme_params.
+S0-cpp:
+  privacy: "LWE with n = 2048, log q = 64 (VeriSimplePIR's 64-bit SimplePIR); the paper states no level in bits"
+  integrity: "none"
+  source: >-
+    third_party/verisimplepir/src/lib/pir/lhe.h line 6 (n = 2048 for 64-bit elements); de Castro and Lee,
+    'VeriSimplePIR', USENIX Security 2024 (docs/papers/usenixsecurity24-de-castro.pdf), section 6, p.5942 (PDF page
+    13): log q = 64.
+S1:
+  privacy: "as S0-cpp: LWE with n = 2048, log q = 64"
+  integrity: >-
+    soundness error 2^-40 (statistical parameter lambda = 40), SIS binding at root Hermite factor 1.005, honest
+    digest assumed
+  source: >-
+    third_party/verisimplepir/src/lib/pir/mat_packed.h line 6 (STAT_SEC_PARAM 40); de Castro and Lee,
+    'VeriSimplePIR', USENIX Security 2024 (docs/papers/usenixsecurity24-de-castro.pdf): soundness 2^-lambda,
+    p.5932 (PDF page 3); delta = 1.005, p.5933 (PDF page 4); honest-digest option, section 6, p.5941 (PDF page 12).
+S2:
+  privacy: "as S0-cpp: LWE with n = 2048, log q = 64"
+  integrity: >-
+    soundness error 2^-40 as S1, without the honest-digest assumption; upstream omits the one-time digest check the
+    full scheme needs (docs/threats_to_validity.md)
+  source: >-
+    as S1: third_party/verisimplepir/src/lib/pir/mat_packed.h line 6; de Castro and Lee (docs/papers/
+    usenixsecurity24-de-castro.pdf), p.5932 and p.5941 (PDF pages 3 and 12).
+S3:
+  privacy: "128-bit, LWE with n = 1100, q = 2^32, sigma = 6.4"
+  integrity: "integrity error 2^-64, by integrity amplification with a repetition code (LWE+)"
+  source: >-
+    Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023
+    (docs/papers/usenixsecurity23-colombo.pdf), section 7 Parameters, p.3845 (PDF page 12); Fig 6 caption and
+    section 7.3, p.3846 (PDF page 13).
+S4:
+  privacy: "DDH over the P-256 elliptic curve"
+  integrity: "integrity error 2^-128"
+  source: >-
+    Colombo et al. (docs/papers/usenixsecurity23-colombo.pdf), section 7 Parameters, p.3845 (PDF page 12): P-256;
+    Fig 6 caption and section 7.3, p.3846 (PDF page 13): 2^-128.
+M0:
+  privacy: "information-theoretic, if at least one of the two servers is honest (non-colluding servers)"
+  integrity: "none"
+  source: >-
+    Colombo et al. (docs/papers/usenixsecurity23-colombo.pdf), section 2, p.3837 (PDF page 4).
+M1:
+  privacy: "information-theoretic, as M0 (non-colluding servers)"
+  integrity: "Merkle tree over BLAKE3; a forged answer needs a BLAKE3 collision"
+  source: >-
+    Colombo et al. (docs/papers/usenixsecurity23-colombo.pdf), section 7 Parameters, p.3845 (PDF page 12): BLAKE3;
+    section 2, p.3837 (PDF page 4): privacy.

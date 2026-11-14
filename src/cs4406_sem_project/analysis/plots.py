@@ -27,6 +27,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+import yaml  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.ticker import EngFormatter, FuncFormatter  # noqa: E402
 
@@ -37,6 +38,7 @@ from cs4406_sem_project.harness.grid import fmt_size  # noqa: E402
 ROOT = Path(__file__).resolve().parents[3]
 FIGURES = ROOT / "results" / "figures"
 SYSINFO = ROOT / "env" / "sysinfo.json"
+SECURITY_LEVELS = ROOT / "configs" / "security_levels.yaml"
 SYNTHETIC_MARK = "SYNTHETIC, not a result"
 
 # dataviz reference palette (light): categorical slots in fixed order, one per arm, the same in every figure.
@@ -734,15 +736,17 @@ def t1_machine(sysinfo: Path) -> pd.DataFrame:
     return pd.DataFrame({"key": flat.index, "value": [str(v) for v in flat.values]})
 
 
-def t2_params(t: Tables) -> pd.DataFrame:
+def t2_params(t: Tables, security: Path = SECURITY_LEVELS) -> pd.DataFrame:
+    """One row per arm and parameter set, with the arm's security level and its source from configs/security_levels.yaml."""
+    levels = yaml.safe_load(security.read_text())
     rows = []
     for (arm, params), g in t.frame.groupby(["arm", "scheme_params"], sort=False):
-        parsed = json.loads(params)
         cells = sorted({f"{fmt_size(int(d))}x{fmt_size(int(r)) if r else '1bit'}"
                         for d, r in zip(g.db_bytes, g.record_bytes)})
+        level = levels[arm]
         rows.append({"arm": arm, "adapter": g.adapter.iloc[0], "cells": ", ".join(cells),
-                     "scheme_params": params,
-                     "security_level": parsed.get("security_level", "TODO[HUMAN]: from the papers")})
+                     "scheme_params": params, "privacy": level["privacy"], "integrity": level["integrity"],
+                     "security_source": level["source"]})
     order = {a: i for i, a in enumerate(grid.ARMS)}
     return pd.DataFrame(rows).sort_values("arm", key=lambda s: s.map(order), kind="stable")
 
