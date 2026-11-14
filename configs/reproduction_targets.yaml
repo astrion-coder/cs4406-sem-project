@@ -23,12 +23,14 @@
 #   extrapolated: true reads the value from analysis/extrapolate.py's S4 table (decision 10), with no CI
 #   record: a record size, or null for one-bit retrieval (S3, S4, and S0-go's README anchor)
 #   unit: of value and range; x for ratios
+#   where: the source (paper and its PDF in docs/papers/, or the SimplePIR README), section, figure, the printed page
+#          number and the page in the PDF file, which starts with a cover page
 
 targets:
   # Colombo et al. [CNCG+23], two servers, 1 KiB records (spec 5 anchor)
   - id: R1-time
     ref: R1
-    where: "§7.1, Fig 3, p.3845"
+    where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): §7.1, Fig 3, p.3845 (PDF page 12)"
     claim: "Maximum M1/M0 user-time overhead"
     published: "maximum overhead of 2.9× for user time"
     check: max_ratio
@@ -42,7 +44,7 @@ targets:
     unit: x
   - id: R1-bw
     ref: R1
-    where: "§7.1, Fig 3, p.3845"
+    where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): §7.1, Fig 3, p.3845 (PDF page 12)"
     claim: "Maximum M1/M0 bandwidth overhead"
     published: "maximum overhead of ... 1.8× for bandwidth"
     check: max_ratio
@@ -56,7 +58,7 @@ targets:
     unit: x
   - id: R2-time
     ref: R2
-    where: "§7.1, p.3845"
+    where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): §7.1, p.3845 (PDF page 12)"
     claim: "M1/M0 user-time overhead grows with database size"
     published: "Both the user time and the bandwidth overheads increase as the database size increases"
     check: trend_up
@@ -69,7 +71,7 @@ targets:
     unit: x
   - id: R2-bw
     ref: R2
-    where: "§7.1, p.3845"
+    where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): §7.1, p.3845 (PDF page 12)"
     claim: "M1/M0 bandwidth overhead grows with database size"
     published: "Both the user time and the bandwidth overheads increase as the database size increases"
     check: trend_up
@@ -82,7 +84,7 @@ targets:
     unit: x
   - id: R3-time-ratio
     ref: R3
-    where: "Fig 3, p.3845 (note R1a)"
+    where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 3, p.3845 (PDF page 12) (note R1a)"
     claim: "M1/M0 user time at 1 GiB"
     published: "At 1 GiB the plot gives about 1.9× user time"
     check: ratio
@@ -96,7 +98,7 @@ targets:
     unit: x
   - id: R3-bw-ratio
     ref: R3
-    where: "Fig 3, p.3845 (note R1a)"
+    where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 3, p.3845 (PDF page 12) (note R1a)"
     claim: "M1/M0 bandwidth at 1 GiB"
     published: "At 1 GiB the plot gives ... about 1.6× bandwidth"
     check: ratio
@@ -108,16 +110,16 @@ targets:
     db: [1GiB]
     value: 1.6
     unit: x
-  - {id: R3-time-M0, ref: R3, where: "Fig 3, p.3845", claim: "M0 user time at 1 GiB",
+  - {id: R3-time-M0, ref: R3, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 3, p.3845 (PDF page 12)", claim: "M0 user time at 1 GiB",
      published: "user time [s] axis: unauthenticated about 0.13", check: abs, rule: hw, precision: plot,
      num: {arm: M0, record: 1KiB}, metric: user_time_s, db: [1GiB], value: 0.13, unit: s}
-  - {id: R3-time-M1, ref: R3, where: "Fig 3, p.3845", claim: "M1 user time at 1 GiB",
+  - {id: R3-time-M1, ref: R3, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 3, p.3845 (PDF page 12)", claim: "M1 user time at 1 GiB",
      published: "authenticated about 0.25", check: abs, rule: hw, precision: plot,
      num: {arm: M1, record: 1KiB}, metric: user_time_s, db: [1GiB], value: 0.25, unit: s}
-  - {id: R3-bw-M0, ref: R3, where: "Fig 3, p.3845", claim: "M0 bandwidth at 1 GiB",
+  - {id: R3-bw-M0, ref: R3, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 3, p.3845 (PDF page 12)", claim: "M0 bandwidth at 1 GiB",
      published: "bandwidth [MiB] axis: unauthenticated about 2.1", check: abs, rule: exact, precision: plot,
      num: {arm: M0, record: 1KiB}, metric: online_bytes, db: [1GiB], value: 2.1, unit: MiB}
-  - {id: R3-bw-M1, ref: R3, where: "Fig 3, p.3845", claim: "M1 bandwidth at 1 GiB",
+  - {id: R3-bw-M1, ref: R3, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 3, p.3845 (PDF page 12)", claim: "M1 bandwidth at 1 GiB",
      published: "authenticated about 3.4", check: abs, rule: exact, precision: plot,
      num: {arm: M1, record: 1KiB}, metric: online_bytes, db: [1GiB], value: 3.4, unit: MiB}
 
@@ -125,7 +127,7 @@ targets:
   # of 2048-bit database records" (p.3846), which is our S0-go at 256 B records.
   - id: R5
     ref: R5
-    where: "§7.3, p.3846"
+    where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): §7.3, p.3846 (PDF page 13)"
     claim: "S3 (LWE+) user time over S0-go (SimplePIR)"
     published: "SimplePIR is 30-100× faster than LWE+"
     check: ratio
@@ -137,74 +139,74 @@ targets:
     db: [1MiB, 1GiB]
     range: [30, 100]
     unit: x
-  - {id: R9-S4-1MiB, ref: R9, where: "Fig 6, p.3846", claim: "S4 (DDH) user time at 1 MiB",
+  - {id: R9-S4-1MiB, ref: R9, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S4 (DDH) user time at 1 MiB",
      published: "1 MiB: DDH about 6×10^4", check: abs, rule: hw, precision: plot,
      num: {arm: S4, record: null}, metric: user_time_s, db: [1MiB], value: 6.0e+4, unit: ms}
-  - {id: R9-S3-1MiB, ref: R9, where: "Fig 6, p.3846", claim: "S3 (LWE+) user time at 1 MiB",
+  - {id: R9-S3-1MiB, ref: R9, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S3 (LWE+) user time at 1 MiB",
      published: "LWE+ about 350", check: abs, rule: hw, precision: plot,
      num: {arm: S3, record: null}, metric: user_time_s, db: [1MiB], value: 350, unit: ms}
-  - {id: R9-S0-1MiB, ref: R9, where: "Fig 6, p.3846", claim: "S0-go user time at 1 MiB",
+  - {id: R9-S0-1MiB, ref: R9, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S0-go user time at 1 MiB",
      published: "SimplePIR about 5.", check: abs, rule: hw, precision: plot,
      num: {arm: S0-go, record: 256B}, metric: user_time_s, db: [1MiB], value: 5, unit: ms}
-  - {id: R9-S3-1GiB, ref: R9, where: "Fig 6, p.3846", claim: "S3 (LWE+) user time at 1 GiB",
+  - {id: R9-S3-1GiB, ref: R9, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S3 (LWE+) user time at 1 GiB",
      published: "LWE+ about 5.4×10^4", check: abs, rule: hw, precision: plot,
      num: {arm: S3, record: null}, metric: user_time_s, db: [1GiB], value: 5.4e+4, unit: ms}
-  - {id: R9-S0-1GiB, ref: R9, where: "Fig 6, p.3846", claim: "S0-go user time at 1 GiB",
+  - {id: R9-S0-1GiB, ref: R9, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S0-go user time at 1 GiB",
      published: "SimplePIR about 400", check: abs, rule: hw, precision: plot,
      num: {arm: S0-go, record: 256B}, metric: user_time_s, db: [1GiB], value: 400, unit: ms}
-  - {id: R10-S4-1MiB, ref: R10, where: "Fig 6, p.3846", claim: "S4 digest download at 1 MiB",
+  - {id: R10-S4-1MiB, ref: R10, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S4 digest download at 1 MiB",
      published: "1 MiB: DDH about 93", check: abs, rule: exact, precision: plot,
      num: {arm: S4, record: null}, metric: offline_down_bytes_hint_only, db: [1MiB], value: 93, unit: KiB}
-  - {id: R10-S3-1MiB, ref: R10, where: "Fig 6, p.3846", claim: "S3 digest download at 1 MiB",
+  - {id: R10-S3-1MiB, ref: R10, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S3 digest download at 1 MiB",
      published: "LWE+ about 1.25×10^4", check: abs, rule: exact, precision: plot,
      num: {arm: S3, record: null}, metric: offline_down_bytes_hint_only, db: [1MiB], value: 1.25e+4, unit: KiB}
-  - {id: R10-S0-1MiB, ref: R10, where: "Fig 6, p.3846", claim: "S0-go hint download at 1 MiB",
+  - {id: R10-S0-1MiB, ref: R10, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S0-go hint download at 1 MiB",
      published: "SimplePIR about 4.1×10^3", check: abs, rule: exact, precision: plot,
      num: {arm: S0-go, record: 256B}, metric: offline_down_bytes_hint_only, db: [1MiB], value: 4.1e+3, unit: KiB}
-  - {id: R10-S3-1GiB, ref: R10, where: "Fig 6, p.3846", claim: "S3 digest download at 1 GiB",
+  - {id: R10-S3-1GiB, ref: R10, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S3 digest download at 1 GiB",
      published: "LWE+ about 4×10^5", check: abs, rule: exact, precision: plot,
      num: {arm: S3, record: null}, metric: offline_down_bytes_hint_only, db: [1GiB], value: 4.0e+5, unit: KiB}
-  - {id: R10-S0-1GiB, ref: R10, where: "Fig 6, p.3846", claim: "S0-go hint download at 1 GiB",
+  - {id: R10-S0-1GiB, ref: R10, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S0-go hint download at 1 GiB",
      published: "SimplePIR about 1.2×10^5", check: abs, rule: exact, precision: plot,
      num: {arm: S0-go, record: 256B}, metric: offline_down_bytes_hint_only, db: [1GiB], value: 1.2e+5, unit: KiB}
-  - {id: R11-S4-1MiB, ref: R11, where: "Fig 6, p.3846", claim: "S4 online bytes at 1 MiB",
+  - {id: R11-S4-1MiB, ref: R11, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S4 online bytes at 1 MiB",
      published: "1 MiB: DDH about 185", check: abs, rule: exact, precision: plot,
      num: {arm: S4, record: null}, metric: online_bytes, db: [1MiB], value: 185, unit: KiB}
-  - {id: R11-S3-1MiB, ref: R11, where: "Fig 6, p.3846", claim: "S3 online bytes at 1 MiB",
+  - {id: R11-S3-1MiB, ref: R11, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S3 online bytes at 1 MiB",
      published: "LWE+ about 200", check: abs, rule: exact, precision: plot,
      num: {arm: S3, record: null}, metric: online_bytes, db: [1MiB], value: 200, unit: KiB}
-  - {id: R11-S0-1MiB, ref: R11, where: "Fig 6, p.3846", claim: "S0-go online bytes at 1 MiB",
+  - {id: R11-S0-1MiB, ref: R11, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S0-go online bytes at 1 MiB",
      published: "SimplePIR about 6.3", check: abs, rule: exact, precision: plot,
      num: {arm: S0-go, record: 256B}, metric: online_bytes, db: [1MiB], value: 6.3, unit: KiB}
-  - {id: R11-S3-1GiB, ref: R11, where: "Fig 6, p.3846", claim: "S3 online bytes at 1 GiB",
+  - {id: R11-S3-1GiB, ref: R11, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S3 online bytes at 1 GiB",
      published: "LWE+ about 1.1×10^4", check: abs, rule: exact, precision: plot,
      num: {arm: S3, record: null}, metric: online_bytes, db: [1GiB], value: 1.1e+4, unit: KiB}
-  - {id: R11-S0-1GiB, ref: R11, where: "Fig 6, p.3846", claim: "S0-go online bytes at 1 GiB",
+  - {id: R11-S0-1GiB, ref: R11, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S0-go online bytes at 1 GiB",
      published: "SimplePIR about 235", check: abs, rule: exact, precision: plot,
      num: {arm: S0-go, record: 256B}, metric: online_bytes, db: [1GiB], value: 235, unit: KiB}
   # Fig 6 at 1 KiB, from the anchors tier (decision 21). SimplePIR's 1 KiB bar uses 2048-bit records,
   # which a 1 KiB database holds four of, so S0-go has no 1 KiB anchor.
-  - {id: R9-S4-1KiB, ref: R9, where: "Fig 6, p.3846", claim: "S4 (DDH) user time at 1 KiB",
+  - {id: R9-S4-1KiB, ref: R9, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S4 (DDH) user time at 1 KiB",
      published: "1 KiB: DDH about 130", check: abs, rule: hw, precision: plot,
      num: {arm: S4, record: null}, metric: user_time_s, db: [1KiB], value: 130, unit: ms}
-  - {id: R9-S3-1KiB, ref: R9, where: "Fig 6, p.3846", claim: "S3 (LWE+) user time at 1 KiB",
+  - {id: R9-S3-1KiB, ref: R9, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S3 (LWE+) user time at 1 KiB",
      published: "LWE+ about 18", check: abs, rule: hw, precision: plot,
      num: {arm: S3, record: null}, metric: user_time_s, db: [1KiB], value: 18, unit: ms}
-  - {id: R10-S4-1KiB, ref: R10, where: "Fig 6, p.3846", claim: "S4 digest download at 1 KiB",
+  - {id: R10-S4-1KiB, ref: R10, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S4 digest download at 1 KiB",
      published: "1 KiB: DDH about 3", check: abs, rule: exact, precision: plot,
      num: {arm: S4, record: null}, metric: offline_down_bytes_hint_only, db: [1KiB], value: 3, unit: KiB}
-  - {id: R10-S3-1KiB, ref: R10, where: "Fig 6, p.3846", claim: "S3 digest download at 1 KiB",
+  - {id: R10-S3-1KiB, ref: R10, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S3 digest download at 1 KiB",
      published: "LWE+ about 390", check: abs, rule: exact, precision: plot,
      num: {arm: S3, record: null}, metric: offline_down_bytes_hint_only, db: [1KiB], value: 390, unit: KiB}
-  - {id: R11-S4-1KiB, ref: R11, where: "Fig 6, p.3846", claim: "S4 online bytes at 1 KiB",
+  - {id: R11-S4-1KiB, ref: R11, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S4 online bytes at 1 KiB",
      published: "1 KiB: DDH about 5.8", check: abs, rule: exact, precision: plot,
      num: {arm: S4, record: null}, metric: online_bytes, db: [1KiB], value: 5.8, unit: KiB}
-  - {id: R11-S3-1KiB, ref: R11, where: "Fig 6, p.3846", claim: "S3 online bytes at 1 KiB",
+  - {id: R11-S3-1KiB, ref: R11, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6, p.3846 (PDF page 13)", claim: "S3 online bytes at 1 KiB",
      published: "LWE+ about 5", check: abs, rule: exact, precision: plot,
      num: {arm: S3, record: null}, metric: online_bytes, db: [1KiB], value: 5, unit: KiB}
   # DDH at 1 GiB, extrapolated from S4's measured sizes (decision 10). Reported as the hardware factor
   # over the paper's one hour, which is a lower bound ("over an hour").
-  - {id: R8, ref: R8, where: "Fig 6 caption, p.3846", claim: "S4 (DDH) user time at 1 GiB, extrapolated",
+  - {id: R8, ref: R8, where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): Fig 6 caption, p.3846 (PDF page 13)", claim: "S4 (DDH) user time at 1 GiB, extrapolated",
      published: "DDH takes over an hour to retrieve a data bit from a 1 GiB database", check: abs, rule: hw,
      precision: text, extrapolated: true,
      num: {arm: S4, record: null}, metric: user_time_s, db: [1GiB], value: 1, unit: h}
@@ -213,18 +215,18 @@ targets:
   # (decision 21). The README's MB and KB are binary: the hint is ell x n x 4 B and the online bytes
   # (m + ell) x 4 B, and only MiB and KiB put them near 121 and 242. The 5 % text tolerance gives the
   # same verdict under either reading.
-  - {id: R23, ref: R23, where: "SimplePIR README, Benchmarks", claim: "S0-go hint, 2^33 one-bit entries",
+  - {id: R23, ref: R23, where: "SimplePIR README, 'Benchmarks' section (third_party/simplepir/README.md)", claim: "S0-go hint, 2^33 one-bit entries",
      published: "121 MB of offline download", check: abs, rule: exact, precision: text,
      num: {arm: S0-go, record: null}, metric: offline_down_bytes_hint_only, db: [1GiB], value: 121, unit: MiB}
-  - {id: R24, ref: R24, where: "SimplePIR README, Benchmarks", claim: "S0-go online bytes, 2^33 one-bit entries",
+  - {id: R24, ref: R24, where: "SimplePIR README, 'Benchmarks' section (third_party/simplepir/README.md)", claim: "S0-go online bytes, 2^33 one-bit entries",
      published: "242 KB of online communication", check: abs, rule: exact, precision: text,
      num: {arm: S0-go, record: null}, metric: online_bytes, db: [1GiB], value: 242, unit: KiB}
-  - {id: R25, ref: R25, where: "SimplePIR README, Benchmarks", claim: "S0-go server throughput, one core",
+  - {id: R25, ref: R25, where: "SimplePIR README, 'Benchmarks' section (third_party/simplepir/README.md)", claim: "S0-go server throughput, one core",
      published: "a throughput of roughly 10 GB/s/core", check: abs, rule: hw, precision: text,
      num: {arm: S0-go, record: null}, metric: throughput_GBps, db: [1GiB], value: 10, unit: GB/s}
   - id: R12
     ref: R12
-    where: "§7.3, p.3847"
+    where: "Colombo et al., 'Authenticated private information retrieval', USENIX Security 2023 (docs/papers/usenixsecurity23-colombo.pdf): §7.3, p.3847 (PDF page 14)"
     claim: "S0-go hint smaller than the S3 digest"
     published: "Concrete offline bandwidth is lower in SimplePIR due to database packing"
     check: less
@@ -240,7 +242,7 @@ targets:
   # 1 KiB; the paper uses 1-bit entries. TODO[HUMAN]: confirm the record size to compare at.
   - id: R17-S1
     ref: R17
-    where: "Fig 7 left, p.5943"
+    where: "de Castro and Lee, 'VeriSimplePIR', USENIX Security 2024 (docs/papers/usenixsecurity24-de-castro.pdf): Fig 7 left, p.5943 (PDF page 14)"
     claim: "S1/S0-cpp online compute, against the 64-bit bars"
     published: "Against the 64-bit bars the plot gives roughly 1.0× for S1"
     check: ratio
@@ -254,7 +256,7 @@ targets:
     unit: x
   - id: R17-S2
     ref: R17
-    where: "Fig 7 left, p.5943"
+    where: "de Castro and Lee, 'VeriSimplePIR', USENIX Security 2024 (docs/papers/usenixsecurity24-de-castro.pdf): Fig 7 left, p.5943 (PDF page 14)"
     claim: "S2/S0-cpp online compute, against the 64-bit bars"
     published: "roughly 1.27× to 1.5× for S2"
     check: ratio
@@ -268,7 +270,7 @@ targets:
     unit: x
   - id: R15
     ref: R15
-    where: "§6, Benchmarks: Online Phase, p.5942"
+    where: "de Castro and Lee, 'VeriSimplePIR', USENIX Security 2024 (docs/papers/usenixsecurity24-de-castro.pdf): §6, Benchmarks: Online Phase, p.5942 (PDF page 13)"
     claim: "S2/S0-cpp compute slowdown (paper's baseline is 32-bit SimplePIR)"
     published: "a 12% to 40% slowdown in the compute time"
     check: ratio
@@ -283,7 +285,7 @@ targets:
     unit: x
   - id: R16
     ref: R16
-    where: "§6, p.5942"
+    where: "de Castro and Lee, 'VeriSimplePIR', USENIX Security 2024 (docs/papers/usenixsecurity24-de-castro.pdf): §6, p.5942 (PDF page 13)"
     claim: "S1/S0-cpp compute (paper's baseline is 32-bit SimplePIR)"
     published: "the online computation actually outperforms the original semi-honest SimplePIR protocol"
     check: ratio
