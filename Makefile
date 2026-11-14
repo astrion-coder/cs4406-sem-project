@@ -106,9 +106,10 @@ analyse:
 
 # SESSION=results/raw/<run_id>/session adds F8, NETEM=results/raw/<run_id>/netem adds F9 and
 # LOADRUN=results/raw/<run_id>/loadgen adds F10 and F11; without its input a figure is skipped with a note.
-# LOADRUN, not LOADGEN, because LOADGEN names the load-generator binary below.
+# LOADRUN, not LOADGEN, because LOADGEN names the load-generator binary below. RECOVERY="results/raw/<run_id> ..."
+# adds F12 and F13 from the RQ4 recovery runs, a later run's Runs replacing an earlier one's.
 figures:
-	uv run python -m cs4406_sem_project.analysis.plots $(RUNS_ARGS) $(if $(SESSION),--session $(SESSION)) $(if $(NETEM),--netem $(NETEM)) $(if $(LOADRUN),--loadgen $(LOADRUN)) --out results/figures
+	uv run python -m cs4406_sem_project.analysis.plots $(RUNS_ARGS) $(if $(SESSION),--session $(SESSION)) $(if $(NETEM),--netem $(NETEM)) $(if $(LOADRUN),--loadgen $(LOADRUN)) $(if $(RECOVERY),--recovery $(RECOVERY)) --out results/figures
 
 # The report, from docs/report.tex and the figures the notebooks write to docs/figures. Needs a TeX
 # distribution with latexmk (BasicTeX is enough). Auxiliary files go to build/report.

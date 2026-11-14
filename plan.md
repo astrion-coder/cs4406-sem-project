@@ -1,20 +1,19 @@
 # Plan: the price of verifiability in PIR
 
-Revised 9 November 2026. Owners: Iman Kalyan Chakraborty (IC) and Shambhavi Gantla (SG).
+Revised 9 November 2026, status updated 14 November. Owners: Iman Kalyan Chakraborty (IC) and Shambhavi Gantla (SG).
 
 This plan divides the remaining work between the two of us. The build contract is `vpir_bench_spec.md`. Where this plan and the spec disagree, this plan wins until task IC-1 writes the decisions below into the spec.
 
 ## Where we are
 
-- Phase P0 is done. All three upstream codebases (SimplePIR, VeriSimplePIR, and Colombo et al.'s apir-code) build and pass their own test suites natively on the M1 Pro (`notebooks/01_g0_upstream_tests.ipynb`, cell 1). That is gate G0.
-- `make setup`, `make build`, `make test` and `make sysinfo` work. The `verify-vpir-bench` skill drives and checks them.
-- Phase P1 is done. Three adapters in `src/adapters/` cover all eight configurations, and they pass the conformance test (`notebooks/02_g1_conformance.ipynb`, cell 1). That is gate G1. `make conformance` reruns it.
-- P7's adapter side is done. All eight configurations inject the P7 faults and run the recovery policies, and `make recovery` passes 159 of 159 (`notebooks/03_p7_recovery.ipynb`, cell 1). The recovery experiments (IC-7's 100 trials per case, the cheating-rate sweep, F12 and F13) wait for the harness.
-- IC-8's serve mode is done. `docs/serve_protocol.md` is the contract for SG's load generator. Every adapter has `--mode serve` and `--mode client`, `tests/test_serve.py` (gate G6, `test_concurrent_correctness`) passes 157 of 157, and the race detector and ThreadSanitizer found nothing. The core sweep (W = 1, 2, 4, 6) and F11 wait for SG's load generator.
-- Every adapter run in the tests is capped at a 2 GiB memory footprint (`harness/memcap.py`), after a cheating M1 run exhausted the Mac's memory. The cause is in upstream apir-code: a corrupted Merkle proof makes `merkle.DecodeProof` allocate up to 96 GiB (`notebooks/04_p7_memory_findings.ipynb`).
-- The harness, analysis and benchmark results do not exist yet. The grid runner (SG-4) is now the critical path.
-- Scope is everything in the spec. That means all eight configurations, the Tier 1 and Tier 2 phases P1 to P9, and the Tier 3 stretch phase P10 last.
-- This schedule assumes the 20 November deadline from earlier course notes. Nobody has confirmed it.
+Status on 14 November 2026: done, apart from the human review of gate G3 and the push. Every phase from P0 to P9 ran on the M1 Pro, and P10 covers RQ5 only. The scope cuts are decisions 25 and 28 to 30. SG left on 12 November, and IC did SG's tasks from then on.
+
+- **Gates.** G0, G1, G2, G4 (bandwidth checked and RTT recorded, decision 29), G6 and G7 passed. G5 is met by decision 12. G3, the human review of the reproduction table (T3, F1), is still open.
+- **Tier 1.** The grid finished 192 of 206 (cell, phase) runs. The other 14 ran out of memory or timed out, and their status is recorded (`notebooks/17_tier1_grid.ipynb`). The RQ1 anchors finished 6 of 6.
+- **Tier 2.** RQ3a and RQ3b ran at 128 MiB × 1 KiB, RQ3b over loopback, broadband and mobile (notebooks 21 and 22). RQ4 ran on the same cell (notebooks 10 to 13). RQ6 and RQ7 ran 3 runs per point (notebook 23).
+- **Tier 3.** RQ5 is derived from the grid (notebook 24). The second-machine RQ7 run and the sharding wrapper were not done.
+- **Outputs.** `make figures` with `SESSION`, `NETEM`, `LOADRUN` and `RECOVERY` redraws F1 to F6, F8 to F13 and T1 to T4. `make report` builds `docs/report.pdf` (6 pages) from `docs/report.tex`. README.md cites a notebook cell for every number in the report.
+- **Not done.** `make all` was never run from a clean checkout. It ran end to end in the working tree, resuming the grid. The `verify-vpir-bench` skill does not cover `session-check`, `netem`, `concurrency` or `report`.
 
 ## Decisions already made
 

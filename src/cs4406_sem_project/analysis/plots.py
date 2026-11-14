@@ -1,12 +1,13 @@
-"""Figures F1-F6, F8-F11 and tables T1-T4 (spec 12) from raw result rows, in one command.
+"""Figures F1-F6, F8-F13 and tables T1-T4 (spec 12) from raw result rows, in one command.
 
     uv run python -m cs4406_sem_project.analysis.plots --runs results/raw/<run_id> ... [--out results/figures]
         [--session results/raw/<run_id>/session] [--netem results/raw/<run_id>/netem]
-        [--loadgen results/raw/<run_id>/loadgen]
+        [--loadgen results/raw/<run_id>/loadgen] [--recovery results/raw/<run_id> ...]
     uv run python -m cs4406_sem_project.analysis.plots --synthetic tier1 --out <dir>
 
-F8 needs --session (session_check.py), F9 needs --netem (netem.py) and F10 and F11 need --loadgen
-(harness/loadgen.py); without its input a figure is skipped with a note. --synthetic builds every output
+F8 needs --session (session_check.py), F9 needs --netem (netem.py), F10 and F11 need --loadgen
+(harness/loadgen.py) and F12 and F13 need --recovery (harness/recovery.py, drawn by analysis/rq4.py); without its
+input a figure is skipped with a note. --synthetic builds every output
 from analysis/synthetic.py rows, and stamps every figure and table "SYNTHETIC, not a result". Processed tables go to --processed as parquet.
 """
 
@@ -29,7 +30,7 @@ import pandas as pd  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.ticker import EngFormatter, FuncFormatter  # noqa: E402
 
-from cs4406_sem_project.analysis import aggregate, amortise, extrapolate, frame, reproduce, synthetic  # noqa: E402
+from cs4406_sem_project.analysis import aggregate, amortise, extrapolate, frame, reproduce, rq4, synthetic  # noqa: E402
 from cs4406_sem_project.harness import grid, loadgen, netem, session_check  # noqa: E402
 from cs4406_sem_project.harness.grid import fmt_size  # noqa: E402
 
@@ -813,10 +814,14 @@ def main(argv: list[str] | None = None) -> list[Path]:
     p.add_argument("--session", type=Path, help="results/raw/<run_id>/session from session_check.py, for F8")
     p.add_argument("--netem", type=Path, help="results/raw/<run_id>/netem from netem.py, for F9")
     p.add_argument("--loadgen", type=Path, help="results/raw/<run_id>/loadgen from harness/loadgen.py, for F10, F11")
+    p.add_argument("--recovery", type=Path, nargs="+",
+                   help="results/raw/<run_id> recovery runs from harness/recovery.py, later ones replacing earlier "
+                        "Runs of the same name, for F12 and F13")
     args = p.parse_args(argv)
     if args.synthetic:
-        if args.session or args.netem or args.loadgen:
-            p.error("--synthetic builds its own session, network and load rows; drop --session, --netem, --loadgen")
+        if args.session or args.netem or args.loadgen or args.recovery:
+            p.error("--synthetic builds its own session, network and load rows; drop --session, --netem, --loadgen "
+                    "and --recovery")
         g = grid.load()
         df = frame.rows_to_frame(synthetic.rows_for_cells(grid.expand(g, args.synthetic)))
         status = pd.DataFrame()
@@ -853,6 +858,11 @@ def main(argv: list[str] | None = None) -> list[Path]:
     t = build(df, status, session, netem_rows, loadgen_rows)
     aggregate.write_tables(processed(t), processed_dir)
     written = render(t, args.out, synthetic_run=bool(args.synthetic), sysinfo=args.sysinfo)
+    if args.recovery:
+        written += rq4.figures(args.recovery, args.out)
+    elif not args.synthetic:
+        print("skipped F12_recovery_cost, F13_expected_cost: no recovery runs; pass --recovery "
+              "results/raw/<run_id> ...", file=sys.stderr)
     for path in written:
         print(path)
     return written
