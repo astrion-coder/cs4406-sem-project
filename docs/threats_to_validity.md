@@ -6,7 +6,7 @@ The report must address each threat below (spec §13). This file is owned by bot
 
 ## From spec §13
 
-- **Implementation, not scheme.** Ratios across codebases mix scheme cost with engineering quality. Handled by the within-codebase pairs (S1 and S2 against S0-cpp, M1 against M0) and the S0-go against S0-cpp ablation. **Open:** the ablation needs grid data.
+- **Implementation, not scheme.** Ratios across codebases mix scheme cost with engineering quality. Handled by the within-codebase pairs (S1 and S2 against S0-cpp, M1 against M0) and the S0-go against S0-cpp ablation. The ablation shows the effect is large. S0-go and S0-cpp run the same scheme, SimplePIR, yet across the Tier 1 grid S0-go takes 0.023 to 0.869 times S0-cpp's server time, 0.101 to 0.523 times its client time, 0.669 to 0.845 times its online bytes and 0.334 to 0.422 times its client storage (`notebooks/19_rq2_overheads.ipynb` cell 2). The gap mixes engineering with parameters, since S0-cpp uses VeriSimplePIR's 64-bit setting (log q = 64, n = 2048) and S0-go SimplePIR's (log q = 32, n = 1024). It is larger than S1's or S2's verification overhead, so a ratio across code bases would misstate the price of verification.
 - **Different security levels and parameters.** Every record carries `scheme_params`. The report claims equal security only where the papers state it.
 - **Fake versus real preprocessing.** Spec rule 2. Every adapter calls the real setup and preprocessing (`src/adapters/*/README.md`).
 - **S2 lacks the digest check.** Upstream has no `DigVer`, and rule 1 forbids writing it (decision 5). S2's overhead against S0-cpp understates the paper's full scheme.
