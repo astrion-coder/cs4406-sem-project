@@ -1,5 +1,7 @@
 # T3 Reproduction: ours against published
 
+> **Identifiers.** `id` is a published reproduction target (R1 to R28), quoted with its paper and page in docs/reproduction_targets.md and compared by the `rule` in configs/reproduction_targets.yaml. This table answers RQ1, which vpir_bench_spec.md §2 defines along with the other research questions. §12 defines the phases, gates (G3 is the human review of this table), figures (F1 draws it) and tables.
+
 | id | ref | where | claim | cell | ours | ci_lo | ci_hi | published | target | deviation | verdict | rule | unit |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | R1-time | R1 | §7.1, Fig 3, p.3845 | Maximum M1/M0 user-time overhead | M1 1MiB x 1KiB / M0 1MiB x 1KiB | 1.217 | 1.139 | 1.314 | maximum overhead of 2.9× for user time | max <= 2.9 x |  | see summary row | hw | x |

@@ -1,3 +1,5 @@
+# Identifiers: RQ1-RQ7 and H1-H7 are defined in vpir_bench_spec.md section 2; P0-P10 (phases), G0-G7 (gates),
+# F1-F13 and T1-T4 in section 12; R1-R28 (reproduction targets) in docs/reproduction_targets.md; decisions in plan.md.
 # RQ6 (concurrent clients) and RQ7 (server cores), spec 5.1. src/loadgen reads this file.
 # Cells come from the focus tier in grid.yaml, narrowed by `cells`. The corpus is replayed round-robin
 # (docs/serve_protocol.md).

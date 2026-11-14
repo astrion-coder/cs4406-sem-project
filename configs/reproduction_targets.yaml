@@ -1,3 +1,5 @@
+# Identifiers: RQ1-RQ7 and H1-H7 are defined in vpir_bench_spec.md section 2; P0-P10 (phases), G0-G7 (gates),
+# F1-F13 and T1-T4 in section 12; R1-R28 (reproduction targets) in docs/reproduction_targets.md; decisions in plan.md.
 # Reproduction targets our Tier 1 grid can compute (RQ1). analysis/reproduce.py reads this file.
 # Every value and range is copied from docs/reproduction_targets.md, which cites the paper page.
 # The targets that file lists but our grid cannot compute are left out here, with the reason:

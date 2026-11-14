@@ -1,3 +1,5 @@
+# Identifiers: RQ1-RQ7 and H1-H7 are defined in vpir_bench_spec.md section 2; P0-P10 (phases), G0-G7 (gates),
+# F1-F13 and T1-T4 in section 12; R1-R28 (reproduction targets) in docs/reproduction_targets.md; decisions in plan.md.
 # The benchmark grid (spec 5, plan decisions 9 and 10). grid.py expands a tier into cells, one per
 # (arm, db size, record size, phase), and is the only code that converts sizes to bytes or bits.
 # Sizes are strings with a binary unit: B, KiB, MiB, GiB.

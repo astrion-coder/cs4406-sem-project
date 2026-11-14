@@ -1,5 +1,7 @@
 # simplepir_go: adapter for arm S0-go
 
+> **Identifiers.** RQ1 to RQ7 (research questions) and H1 to H7 (hypotheses) are defined in [the spec](../../../vpir_bench_spec.md) §2, P0 to P10 (phases), G0 to G7 (gates), F1 to F13 (figures) and T1 to T4 (tables) in §12, and the tests behind each gate in §11. R1 to R28 (published reproduction targets) are defined in [docs/reproduction_targets.md](../../../docs/reproduction_targets.md). Decisions 1 to 30 are numbered in [plan.md](../../../plan.md).
+
 Drives the original Go SimplePIR (`third_party/simplepir`, package `pir`) through the contract in `../README.md`. It serves one arm, `S0-go`, the unauthenticated single-server baseline. There is no verification, so every record has `detected: null` and `verify_fused: false`.
 
 ## Build

@@ -1,5 +1,7 @@
 # Reproduction targets (RQ1)
 
+> **Identifiers.** RQ1 to RQ7 (research questions) and H1 to H7 (hypotheses) are defined in [the spec](../vpir_bench_spec.md) §2, P0 to P10 (phases), G0 to G7 (gates), F1 to F13 (figures) and T1 to T4 (tables) in §12, and the tests behind each gate in §11. R1 to R28 (published reproduction targets) are defined in this file, and spec §3 summarises them. Decisions 1 to 30 are numbered in [plan.md](../plan.md).
+
 Task SG-2. This file lists every published number we try to reproduce, so that `analysis/reproduce.py` can compare our measured values and ratios against them. Owner: SG.
 
 ## How to read this file

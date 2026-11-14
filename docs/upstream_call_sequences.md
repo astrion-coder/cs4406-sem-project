@@ -1,5 +1,7 @@
 # Upstream call sequences (P1 pre-adapter reading)
 
+> **Identifiers.** RQ1 to RQ7 (research questions) and H1 to H7 (hypotheses) are defined in [the spec](../vpir_bench_spec.md) §2, P0 to P10 (phases), G0 to G7 (gates), F1 to F13 (figures) and T1 to T4 (tables) in §12, and the tests behind each gate in §11. R1 to R28 (published reproduction targets) are defined in [docs/reproduction_targets.md](reproduction_targets.md). Decisions 1 to 30 are numbered in [plan.md](../plan.md).
+
 Spec Appendix A step: "read the upstream source for that scheme and summarise the exact call sequence and where verification happens". Read-only survey, no builds run.
 
 **Pins read.** `third_party/simplepir` e9020b0, `third_party/verisimplepir` 3643bb7, `third_party/apir-code` 7a7f204, `third_party/dpf-go` 6eae873.

@@ -1,5 +1,7 @@
 # Adapter contract
 
+> **Identifiers.** RQ1 to RQ7 (research questions) and H1 to H7 (hypotheses) are defined in [the spec](../../vpir_bench_spec.md) §2, P0 to P10 (phases), G0 to G7 (gates), F1 to F13 (figures) and T1 to T4 (tables) in §12, and the tests behind each gate in §11. R1 to R28 (published reproduction targets) are defined in [docs/reproduction_targets.md](../../docs/reproduction_targets.md). Decisions 1 to 30 are numbered in [plan.md](../../plan.md).
+
 Each adapter is a command-line program that drives one upstream library and writes one JSON object per repetition and phase. The harness (`src/cs4406_sem_project/harness/run_grid.py`) only ever calls this command line. Spec §9 is the source. This file fixes the details §9 leaves open, and `harness/schema.json` validates exactly these records.
 
 ## Adapters

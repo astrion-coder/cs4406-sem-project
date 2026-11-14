@@ -1,5 +1,7 @@
 # Plan: the price of verifiability in PIR
 
+> **Identifiers.** RQ1 to RQ7 (research questions) and H1 to H7 (hypotheses) are defined in [the spec](vpir_bench_spec.md) §2, P0 to P10 (phases), G0 to G7 (gates), F1 to F13 (figures) and T1 to T4 (tables) in §12, and the tests behind each gate in §11. R1 to R28 (published reproduction targets) are defined in [docs/reproduction_targets.md](docs/reproduction_targets.md). Decisions 1 to 30 are numbered in this file.
+
 Revised 9 November 2026, status updated 14 November. Owners: Iman Kalyan Chakraborty (IC) and Shambhavi Gantla (SG).
 
 This plan divides the remaining work between the two of us. The build contract is `vpir_bench_spec.md`. Where this plan and the spec disagree, this plan wins until task IC-1 writes the decisions below into the spec.

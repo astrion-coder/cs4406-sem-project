@@ -1,5 +1,7 @@
 # Serve protocol
 
+> **Identifiers.** RQ1 to RQ7 (research questions) and H1 to H7 (hypotheses) are defined in [the spec](../vpir_bench_spec.md) §2, P0 to P10 (phases), G0 to G7 (gates), F1 to F13 (figures) and T1 to T4 (tables) in §12, and the tests behind each gate in §11. R1 to R28 (published reproduction targets) are defined in [docs/reproduction_targets.md](reproduction_targets.md). Decisions 1 to 30 are numbered in [plan.md](../plan.md).
+
 This document fixes how a client talks to an adapter running as a server, for phase P8 and the experiments that need separate processes: RQ3b (emulated network), RQ6 (concurrent clients) and RQ7 (server cores). It is the contract between the adapters' `--mode serve` and `--mode client` (task IC-8) and the load generator in `src/loadgen/` (task SG-7). Spec §9 gives the command lines, and this document adds what §9 leaves open. Bench mode, `src/adapters/README.md`, is unchanged.
 
 ## Processes

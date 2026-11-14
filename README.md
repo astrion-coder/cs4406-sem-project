@@ -2,6 +2,8 @@
 
 The implementation spec is [vpir_bench_spec.md](./vpir_bench_spec.md). Code lives in `src/cs4406_sem_project/`, measurement notebooks in `notebooks/`.
 
+> **Identifiers.** RQ1 to RQ7 (research questions) and H1 to H7 (hypotheses) are defined in [the spec](vpir_bench_spec.md) §2, P0 to P10 (phases), G0 to G7 (gates), F1 to F13 (figures) and T1 to T4 (tables) in §12, and the tests behind each gate in §11. R1 to R28 (published reproduction targets) are defined in [docs/reproduction_targets.md](docs/reproduction_targets.md). Decisions 1 to 30 are numbered in [plan.md](plan.md).
+
 The final report is [docs/report.pdf](./docs/report.pdf), built from the LaTeX source [docs/report.tex](./docs/report.tex) with `make report` (needs latexmk, which BasicTeX provides). Every number in it is a row of the claims table below. Every figure, F1 to F6 and F8 to F13, is redrawn into `results/figures/` by
 
 ```sh

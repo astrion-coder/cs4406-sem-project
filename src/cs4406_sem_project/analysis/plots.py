@@ -755,12 +755,14 @@ def t4_overheads(t: Tables) -> pd.DataFrame:
     return ov[["pair", "role", "db", "record", "phase", "metric", "ratio", "ci95", "n_pairs", "padded"]]
 
 
-def _markdown(df: pd.DataFrame, title: str, synthetic_run: bool) -> str:
+def _markdown(df: pd.DataFrame, title: str, synthetic_run: bool, note: str | None = None) -> str:
     def cell(v) -> str:
         if isinstance(v, float):
             return "" if math.isnan(v) else f"{v:.4g}"
         return str(v).replace("|", "\\|").replace("\n", " ")
     lines = [f"# {title}", ""]
+    if note:
+        lines += [f"> {note}", ""]
     if synthetic_run:
         lines += [f"> **{SYNTHETIC_MARK}.** Rows from analysis/synthetic.py, an invented cost model.", ""]
     lines += ["| " + " | ".join(df.columns) + " |", "|" + "---|" * len(df.columns)]
@@ -771,6 +773,13 @@ def _markdown(df: pd.DataFrame, title: str, synthetic_run: bool) -> str:
 TABLE_TITLES = {"T1_machine": "T1 Machine, toolchain and pinned SHAs", "T2_scheme_params": "T2 Scheme parameters",
                 "T3_reproduction": "T3 Reproduction: ours against published",
                 "T4_overheads": "T4 Overhead summary with 95 % CIs"}
+TABLE_NOTES = {
+    "T3_reproduction": "**Identifiers.** `id` is a published reproduction target (R1 to R28), quoted with its paper and "
+                       "page in docs/reproduction_targets.md and compared by the `rule` in "
+                       "configs/reproduction_targets.yaml. This table answers RQ1, which vpir_bench_spec.md §2 defines "
+                       "along with the other research questions. §12 defines the phases, gates (G3 is the human review "
+                       "of this table), figures (F1 draws it) and tables.",
+}
 
 
 def render(t: Tables, out: Path, *, synthetic_run: bool, sysinfo: Path = SYSINFO) -> list[Path]:
@@ -796,7 +805,8 @@ def render(t: Tables, out: Path, *, synthetic_run: bool, sysinfo: Path = SYSINFO
     for name, table in tables.items():
         csv = table.assign(note=SYNTHETIC_MARK) if synthetic_run else table
         csv.to_csv(out / f"{name}.csv", index=False)
-        (out / f"{name}.md").write_text(_markdown(table, TABLE_TITLES[name], synthetic_run), encoding="utf-8")
+        (out / f"{name}.md").write_text(_markdown(table, TABLE_TITLES[name], synthetic_run, TABLE_NOTES.get(name)),
+                                          encoding="utf-8")
         written += [out / f"{name}.csv", out / f"{name}.md"]
     return written
 

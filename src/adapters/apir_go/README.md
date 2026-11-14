@@ -1,5 +1,7 @@
 # apir_go
 
+> **Identifiers.** RQ1 to RQ7 (research questions) and H1 to H7 (hypotheses) are defined in [the spec](../../../vpir_bench_spec.md) §2, P0 to P10 (phases), G0 to G7 (gates), F1 to F13 (figures) and T1 to T4 (tables) in §12, and the tests behind each gate in §11. R1 to R28 (published reproduction targets) are defined in [docs/reproduction_targets.md](../../../docs/reproduction_targets.md). Decisions 1 to 30 are numbered in [plan.md](../../../plan.md).
+
 Adapter for Colombo et al.'s apir-code (`third_party/apir-code`, module `github.com/si-co/vpir-code`, pinned at `35cabd6`). It serves four arms and follows the contract in `../README.md`.
 
 | Arm | Scheme | Upstream calls |

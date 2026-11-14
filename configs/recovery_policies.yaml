@@ -1,3 +1,5 @@
+# Identifiers: RQ1-RQ7 and H1-H7 are defined in vpir_bench_spec.md section 2; P0-P10 (phases), G0-G7 (gates),
+# F1-F13 and T1-T4 in section 12; R1-R28 (reproduction targets) in docs/reproduction_targets.md; decisions in plan.md.
 # RQ4 failure and recovery (spec 5.1 and 6.1). harness/recovery.py expands this into adapter runs.
 # Decision 12: the client never retries the same server, so retry_same is disabled for every arm.
 

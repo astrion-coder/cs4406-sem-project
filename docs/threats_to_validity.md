@@ -1,5 +1,7 @@
 # Threats to validity
 
+> **Identifiers.** RQ1 to RQ7 (research questions) and H1 to H7 (hypotheses) are defined in [the spec](../vpir_bench_spec.md) §2, P0 to P10 (phases), G0 to G7 (gates), F1 to F13 (figures) and T1 to T4 (tables) in §12, and the tests behind each gate in §11. R1 to R28 (published reproduction targets) are defined in [docs/reproduction_targets.md](reproduction_targets.md). Decisions 1 to 30 are numbered in [plan.md](../plan.md).
+
 The report must address each threat below (spec §13). This file is owned by both IC and SG. The first section repeats the spec's list, each with where the project handles it. The second adds threats found while building and testing the adapters, with the evidence for each. Entries marked **open** still need data or a decision before the report.
 
 ## From spec §13
