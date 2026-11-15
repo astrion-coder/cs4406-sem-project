@@ -239,7 +239,7 @@ single-server family, while M1's Merkle tree rebuilds in under a second.
 
 Updates swamp S1 quickly. With $u$ updates per query, a query costs its online time plus $u$ rebuilds. At one update
 per 100 queries, an S1 query costs 1.37\,s against 0.032\,s with no updates, and an M1 query costs 0.045\,s.
-Rebuilding takes half of S1's cost once $u$ reaches $2.4\times10^{-4}$, about one update per 4,100 queries, against
+Rebuilding takes half of S1's cost once $u$ reaches $2.4\times10^{-4}$, one update per 4,155 queries, against
 one per 21 queries for M1. At 1\,GiB an S1 rebuild takes 1,073\,s of server time, so a database that changes more than
 a few times an hour cannot keep S1's verified state current on this machine.
 
