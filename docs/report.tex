@@ -24,7 +24,8 @@
 
 \title{\vspace{-1.2cm}The price of verifiability in PIR:\\a common-hardware re-evaluation}
 \author{Iman Kalyan Chakraborty (2026801003) \and Shambhavi Gantla (2026801014)}
-\date{CS4406, 13 November 2026}
+\date{CS4406, 13 November 2026\\[2pt]\small Code, raw results and notebooks:
+  \url{https://github.com/astrion-coder/cs4406-sem-project}}
 
 \begin{document}
 \maketitle
@@ -161,7 +162,7 @@ total was within 2.4\,\% of the computed one. Only the client time of M0 and M1 
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{F4_amortised}
+  \includegraphics[width=0.9\linewidth]{F4_amortised}
   \caption{Amortised cost per query against the number of queries $Q$ \src{21}{5}.}
   \label{fig:f4}
 \end{figure}
@@ -187,7 +188,7 @@ sets the user's wait.
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{F9_emulated_network}
+  \includegraphics[width=0.92\linewidth]{F9_emulated_network}
   \caption{Emulated against modelled latency, and latency overhead against byte overhead, per link \src{22}{5}.}
   \label{fig:f9}
 \end{figure}
@@ -207,7 +208,7 @@ switch. For re-preprocessing at $f = 0.1$ the measured mean is 1.98\x{} the mode
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=0.9\linewidth]{F12_recovery_cost}
+  \includegraphics[width=0.85\linewidth]{F12_recovery_cost}
   \caption{Time to a verified record or an abort, as a multiple of the fault-free latency \src{11}{4}.}
   \label{fig:f12}
 \end{figure}
@@ -279,7 +280,7 @@ allows.
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{F11_cores}
+  \includegraphics[width=0.9\linewidth]{F11_cores}
   \caption{Throughput against server workers $W$, relative to $W = 1$, and the overhead per price pair \src{23}{6}.}
   \label{fig:f11}
 \end{figure}
@@ -330,6 +331,7 @@ The full list, with evidence for each entry, is in \texttt{docs/threats\_to\_val
 
 \section{Reproducing this report}
 
+Everything below runs from the repository at \url{https://github.com/astrion-coder/cs4406-sem-project}.
 \texttt{make build test} rebuilds the three code bases and reruns their test suites. \texttt{make all} reruns the
 Tier 1 grid and the reproduction anchors and redraws F1 to F6. \texttt{make session-check}, \texttt{make netem},
 \texttt{make concurrency} and \texttt{make figures} cover the Tier 2 runs, and \texttt{make report} builds this PDF.
